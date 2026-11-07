@@ -1,0 +1,5 @@
+# Aplicación web
+flask>=3.0,<4
+
+# Solo para abrir/ejecutar el notebook (opcional)
+notebook
