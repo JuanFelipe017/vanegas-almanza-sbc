@@ -1,5 +1,4 @@
 # Aplicación web
 flask>=3.0,<4
-
-# Solo para abrir/ejecutar el notebook (opcional)
-notebook
+# Servidor de producción (lo usa Render; en Windows se ejecuta con "python src/app.py")
+gunicorn>=23,<24

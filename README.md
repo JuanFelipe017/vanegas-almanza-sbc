@@ -3,6 +3,8 @@
 **Inteligencia Artificial II — Proyecto final · Fundación Universitaria Los Libertadores**
 Juan F. Vanegas Silva · Diego Felipe Almanza Vanegas
 
+**Demo en línea:** <https://vanegas-almanza-sbc.onrender.com> _(plan gratis: si nadie la ha abierto en 15 minutos tarda ~1 minuto en despertar)_
+
 Sistema basado en conocimiento con interfaz web que diagnostica por qué un videojuego va mal en un PC
 (pocos FPS, tirones o lag) y recomienda qué hacer. El usuario ingresa las lecturas de monitoreo
 (FPS, % de GPU/CPU/RAM, temperatura, ping) y los síntomas; el motor de inferencia aplica 15 reglas de
@@ -22,7 +24,8 @@ cd vanegas_almanza_proyecto_final_sbc
 python -m venv .venv
 # Windows:        .venv\Scripts\activate
 # Linux / macOS:  source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt        # app web
+pip install -r requirements-dev.txt    # opcional: + Jupyter para el notebook
 ```
 
 ## Ejecutar la aplicación
@@ -51,14 +54,16 @@ python -m unittest discover -s tests -v
 14 pruebas: los 9 casos documentados en [`tests/casos_prueba.md`](tests/casos_prueba.md), combinación de FC,
 negación, ciclos, validación de entrada y la API web. El notebook
 `vanegas_almanza_proyecto_final_sbc.ipynb` documenta y ejecuta lo mismo paso a paso
-(`jupyter notebook` desde esta carpeta).
+(`jupyter notebook` desde esta carpeta, tras instalar `requirements-dev.txt`).
 
 ## Estructura
 
 ```
 vanegas_almanza_proyecto_final_sbc/
 ├── README.md
-├── requirements.txt
+├── requirements.txt          # Flask + gunicorn (lo que usa el despliegue)
+├── requirements-dev.txt      # + Jupyter
+├── render.yaml               # despliegue en Render (Blueprint)
 ├── vanegas_almanza_proyecto_final_sbc.ipynb   # notebook de documentación y validación
 ├── src/
 │   ├── base_conocimiento.py   # 11 predicados observables, 14 derivados, 15 reglas
@@ -76,6 +81,15 @@ vanegas_almanza_proyecto_final_sbc/
     ├── casos_prueba.md
     └── test_sistema.py
 ```
+
+## Despliegue en la web (Render)
+
+La app está publicada en Render con el archivo [`render.yaml`](render.yaml): instala `requirements.txt`
+y la arranca con `gunicorn --chdir src app:app`. **Cada `git push` a `main` vuelve a desplegarla sola.**
+
+Para desplegar una copia propia: [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/JuanFelipe017/vanegas-almanza-sbc)
+(iniciar sesión con GitHub → *Apply*). El plan gratis se suspende tras 15 minutos sin visitas; antes de una
+demostración, abrir la página un minuto antes.
 
 ## API
 

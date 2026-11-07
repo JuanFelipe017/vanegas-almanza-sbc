@@ -1,0 +1,15 @@
+# Despliegue en Render (https://render.com) como Blueprint.
+# Render lee este archivo, instala dependencias y arranca la app con gunicorn.
+# Cada push a main vuelve a desplegar automáticamente.
+services:
+  - type: web
+    name: vanegas-almanza-sbc
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --chdir src --bind 0.0.0.0:$PORT --workers 2 --timeout 60 app:app
+    healthCheckPath: /api/base
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
