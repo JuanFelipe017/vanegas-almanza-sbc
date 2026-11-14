@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Sistema experto · Rendimiento en videojuegos</title>
-  <!-- Fuentes de Google si hay internet; sin internet se usan Bahnschrift / Segoe UI (ver style.css) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Russo+One&display=swap">
+  <title>Diagnóstico Gamer · SBC</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" sizes="any">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+  <!-- Fuentes incluidas en static/fonts: funciona igual sin internet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script>
-    // Efectos visuales: por defecto sigue la preferencia del sistema (prefers-reduced-motion);
-    // el botón "Efectos" la cambia y se recuerda en este navegador.
+    // Animaciones: por defecto siguen la preferencia del sistema (prefers-reduced-motion);
+    // el botón "Animaciones" la cambia y se recuerda en este navegador.
     (() => {
       let guardado = null;
       try { guardado = localStorage.getItem("sbc-motion"); } catch {}
@@ -22,120 +22,127 @@
   </script>
 </head>
 <body>
-<!-- Íconos SVG reutilizables (sin emojis ni dependencias externas) -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></symbol>
-  <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r=".9"/><circle cx="17.5" cy="13.5" r=".9"/><path d="M7.5 6h9a5 5 0 0 1 4.9 4l.9 5a3 3 0 0 1-5.3 2.4L15 15H9l-2 2.4A3 3 0 0 1 1.7 15l.9-5A5 5 0 0 1 7.5 6z"/></symbol>
-  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
-  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
-  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></symbol>
-  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 21h20z"/><path d="M12 10v4M12 17.5v.5"/></symbol>
-  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 1.3-1.3a4 4 0 0 0-5-5L5 13 3 11l8-8 2 2z"/></symbol>
-  <symbol id="i-tree" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="19" r="2"/><path d="M5 8v2a4 4 0 0 0 4 4h6a4 4 0 0 0 4-4V8M12 14v3"/></symbol>
-  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.5"/></symbol>
-  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
-  <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="5" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 5c6 0 6 7 10 7M7 19c6 0 6-7 10-7"/></symbol>
+<!-- ============ La placa: fondo de toda la interfaz (decorativo) ============ -->
+<svg class="pcb" aria-hidden="true" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <pattern id="trama-fondo" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#2a1252" stroke-width="2.5"/>
+    </pattern>
+    <linearGradient id="barrido"><stop offset="0" stop-color="#e040fb" stop-opacity="0"/><stop offset=".5" stop-color="#e040fb" stop-opacity=".12"/><stop offset="1" stop-color="#e040fb" stop-opacity="0"/></linearGradient>
+    <radialGradient id="halo-placa" cx=".5" cy=".4" r=".7"><stop offset="0" stop-color="#2a1252"/><stop offset="1" stop-color="#1d0b36" stop-opacity="0"/></radialGradient>
+    <circle id="via" r="3.2" fill="#0d0618" stroke="#d4a72c" stroke-width="1.6"/>
+  </defs>
+  <rect width="1440" height="900" fill="#1d0b36"/>
+  <rect width="1440" height="900" fill="url(#trama-fondo)" opacity=".85"/>
+  <rect width="1440" height="900" fill="url(#halo-placa)"/>
+  <g class="pcb__deriva" fill="none" stroke="#7c3aed" stroke-width="1.5" opacity=".22">
+    <path d="M-40 300L260 0M-40 640L600 0M-40 960L860 60M240 960L1140 60M600 960L1480 80M900 960L1480 380M1180 960L1480 660"/>
+    <path d="M-40 660L620 0M260 960L1160 60M920 960L1480 400" stroke-dasharray="2 10"/>
+  </g>
+  <rect class="pcb__barrido" x="-320" y="-60" width="240" height="1020" fill="url(#barrido)"/>
+  <g fill="none" stroke="#d4a72c" stroke-width="1.6" opacity=".42">
+    <path d="M8 66H1432M8 72H1432M8 883H1432M8 889H1432M16 30V870M1424 30V870"/>
+  </g>
+  <g fill="#0d0618" stroke="#d4a72c" stroke-width="2"><circle cx="13" cy="13" r="6"/><circle cx="1427" cy="13" r="6"/><circle cx="13" cy="887" r="6"/><circle cx="1427" cy="887" r="6"/></g>
+  <g><use href="#via" x="16" y="30"/><use href="#via" x="16" y="870"/><use href="#via" x="1424" y="30"/><use href="#via" x="1424" y="870"/></g>
+  <g class="pcb__seda" font-family="JetBrains Mono, Consolas, monospace" font-size="9" letter-spacing="1.2" fill="rgba(237,228,255,.32)">
+    <text x="30" y="58">SBC-R15 · REV 5</text><text x="1300" y="58">U1 · MOTOR</text><text x="30" y="878">GND · +5V</text><text x="1250" y="878">FUND. LOS LIBERTADORES</text>
+  </g>
+  <!-- pulsos que recorren el borde de la placa al diagnosticar -->
+  <g class="pcb__pulsos" fill="none" stroke="#f6a8ff" stroke-width="3" stroke-linecap="round">
+    <path pathLength="100" d="M8 66H1432"/><path pathLength="100" d="M8 889H1432"/>
+    <path pathLength="100" d="M16 870V30"/><path pathLength="100" d="M1424 870V30"/>
+  </g>
 </svg>
 
-<div class="fx" aria-hidden="true"><span class="fx__blob fx__blob--a"></span><span class="fx__blob fx__blob--b"></span><span class="fx__blob fx__blob--c"></span><span class="fx__grid"></span></div>
-
-<header class="topbar">
-  <div class="topbar__inner">
-    <div class="brand">
-      <span class="brand__logo"><svg class="ico"><use href="#i-chip"/></svg></span>
-      <div>
-        <h1 class="brand__title">Diagnóstico <span class="grad">Gamer</span> <small>SBC</small></h1>
-        <p class="brand__sub">Sistema experto de rendimiento en videojuegos · encadenamiento hacia adelante</p>
-      </div>
-    </div>
-    <div class="hud" aria-label="Estado del sistema">
-      <span class="hud__item"><span class="led" aria-hidden="true"></span><span id="hud-estado">Conectando…</span></span>
-      <span class="hud__item"><b id="hud-reglas">–</b> reglas</span>
-      <span class="hud__item"><b id="hud-pred">–</b> predicados</span>
-      <button type="button" class="hud__item motion-toggle" id="btn-efectos" aria-pressed="true"
-              title="Activar o desactivar animaciones">Efectos <b id="efectos-estado">ON</b></button>
-    </div>
-    <nav class="tabs" role="tablist" aria-label="Secciones">
-      <button class="tab is-active" role="tab" id="tab-btn-diagnostico" data-tab="diagnostico" aria-selected="true" aria-controls="tab-diagnostico">Diagnóstico<span class="tab__ind" aria-hidden="true"></span></button>
-      <button class="tab" role="tab" id="tab-btn-base" data-tab="base" aria-selected="false" aria-controls="tab-base">Base de conocimiento</button>
-    </nav>
+<header class="mod topbar">
+  <p class="brand">
+    <img class="brand__logo" src="{{ url_for('static', filename='img/logo.png') }}" width="40" height="40" alt="">
+    Diagnóstico Gamer <span>· SBC</span>
+  </p>
+  <nav class="tabs" role="tablist" aria-label="Secciones">
+    <button class="tab is-active" role="tab" id="tab-btn-diagnostico" data-tab="diagnostico" aria-selected="true" aria-controls="tab-diagnostico">Diagnóstico<span class="tab__count" id="tab-count-diag"></span></button>
+    <button class="tab" role="tab" id="tab-btn-base" data-tab="base" aria-selected="false" aria-controls="tab-base" tabindex="-1">Base de conocimiento<span class="tab__count" id="tab-count-base"></span></button>
+  </nav>
+  <div class="status" aria-label="Estado del sistema">
+    <span class="status__extra">encadenamiento hacia adelante · FC MYCIN</span>
+    <span class="status__motor"><i class="led-estado" aria-hidden="true"></i><span id="hud-estado">Conectando…</span></span>
+    <button type="button" class="motion-toggle" id="btn-efectos" aria-pressed="true">Animaciones: <b id="efectos-estado">Sí</b></button>
   </div>
 </header>
 
 <main class="container">
   <!-- ======================= PESTAÑA DIAGNÓSTICO ======================= -->
   <section id="tab-diagnostico" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-diagnostico">
-    <h2 class="sr-only" id="titulo-diagnostico">Diagnóstico</h2>
+    <h1 class="sr-only">Diagnóstico Gamer: sistema experto de rendimiento en videojuegos</h1>
+    <p id="anuncio" class="sr-only" aria-live="polite"></p>
     <div class="layout">
-      <!-- --------- Entrada --------- -->
-      <form id="formulario" class="card card--glow form" novalidate>
-        <h2 class="card__title"><span class="step">1</span> Datos del equipo</h2>
+
+      <!-- --------- Módulo: formulario --------- -->
+      <form id="formulario" class="mod form" novalidate aria-labelledby="titulo-form">
+        <h2 class="sr-only" id="titulo-form">Lecturas del equipo</h2>
+        <div id="errores" class="alert" role="alert" tabindex="-1" hidden></div>
 
         <div class="field">
-          <label for="caso">Casos de prueba precargados</label>
+          <label class="sk" for="caso">Caso de prueba</label>
           <div class="row">
-            <select id="caso" aria-describedby="caso-desc">
-              <option value="">— Elegir un caso —</option>
-            </select>
+            <select id="caso" aria-describedby="caso-desc"><option value="">Elegir un caso…</option></select>
             <button type="button" id="btn-cargar" class="btn btn--ghost">Cargar</button>
           </div>
           <p id="caso-desc" class="hint" aria-live="polite"></p>
         </div>
 
         <div class="field">
-          <label for="equipo">Nombre del equipo</label>
-          <input id="equipo" name="equipo" type="text" placeholder="mi_pc" maxlength="30" autocomplete="off">
+          <label class="sk" for="equipo">Equipo</label>
+          <input id="equipo" name="equipo" type="text" class="mono" placeholder="mi_pc" maxlength="30" autocomplete="off">
         </div>
 
-        <fieldset class="group">
-          <legend><svg class="ico ico--sm"><use href="#i-gauge"/></svg> Lecturas de monitoreo</legend>
-          <p class="hint group__hint">Valores mientras juega (MSI Afterburner, administrador de tareas…). Deje vacío lo que no sepa. La barra marca el umbral de cada predicado.</p>
-          <div class="grid2">
-            <!-- data-pred / data-op / data-umbral solo alimentan el medidor visual; quien decide es entrada.py -->
-            <div class="field metric" data-pred="FPSBajos" data-op="<" data-umbral="30" data-max="120">
-              <label for="fps">FPS promedio</label>
-              <div class="input-unit"><input id="fps" name="fps" type="number" min="0" max="1000" step="1" inputmode="numeric"><span>FPS</span></div>
-              <div class="meter" aria-hidden="true"><i></i><b></b></div>
-              <div class="hint-row"><p class="hint">Umbral &lt; 30</p><span class="pred" aria-hidden="true"></span></div>
-            </div>
-            <div class="field metric" data-pred="UsoGPUAlto" data-op=">=" data-umbral="95" data-max="100">
-              <label for="uso_gpu">Uso de GPU</label>
-              <div class="input-unit"><input id="uso_gpu" name="uso_gpu" type="number" min="0" max="100" step="1" inputmode="numeric"><span>%</span></div>
-              <div class="meter" aria-hidden="true"><i></i><b></b></div>
-              <div class="hint-row"><p class="hint">Umbral ≥ 95 %</p><span class="pred" aria-hidden="true"></span></div>
-            </div>
-            <div class="field metric" data-pred="UsoCPUAlto" data-op=">=" data-umbral="90" data-max="100">
-              <label for="uso_cpu">Uso de CPU</label>
-              <div class="input-unit"><input id="uso_cpu" name="uso_cpu" type="number" min="0" max="100" step="1" inputmode="numeric"><span>%</span></div>
-              <div class="meter" aria-hidden="true"><i></i><b></b></div>
-              <div class="hint-row"><p class="hint">Umbral ≥ 90 %</p><span class="pred" aria-hidden="true"></span></div>
-            </div>
-            <div class="field metric" data-pred="TempAlta" data-op=">" data-umbral="90" data-max="110">
-              <label for="temperatura">Temperatura máxima</label>
-              <div class="input-unit"><input id="temperatura" name="temperatura" type="number" min="0" max="150" step="1" inputmode="numeric"><span>°C</span></div>
-              <div class="meter" aria-hidden="true"><i></i><b></b></div>
-              <div class="hint-row"><p class="hint">Umbral &gt; 90 °C</p><span class="pred" aria-hidden="true"></span></div>
-            </div>
-            <div class="field metric" data-pred="RAMLlena" data-op=">=" data-umbral="90" data-max="100">
-              <label for="uso_ram">Uso de RAM</label>
-              <div class="input-unit"><input id="uso_ram" name="uso_ram" type="number" min="0" max="100" step="1" inputmode="numeric"><span>%</span></div>
-              <div class="meter" aria-hidden="true"><i></i><b></b></div>
-              <div class="hint-row"><p class="hint">Umbral ≥ 90 %</p><span class="pred" aria-hidden="true"></span></div>
-            </div>
-            <div class="field metric" data-pred="PingAlto" data-op=">" data-umbral="100" data-max="250">
-              <label for="ping">Ping en línea</label>
-              <div class="input-unit"><input id="ping" name="ping" type="number" min="0" max="5000" step="1" inputmode="numeric"><span>ms</span></div>
-              <div class="meter" aria-hidden="true"><i></i><b></b></div>
-              <div class="hint-row"><p class="hint">Umbral &gt; 100</p><span class="pred" aria-hidden="true"></span></div>
-            </div>
+        <h3 class="form__sub">Lecturas del juego <small>vacío = sin dato</small></h3>
+        <!-- data-pred / data-op / data-umbral solo alimentan la vista previa; quien decide es entrada.py -->
+        <div class="lecturas">
+          <div class="rd metric" data-pred="FPSBajos" data-op="<" data-umbral="30">
+            <label class="sk" for="fps">FPS<small>umbral &lt; 30</small></label>
+            <div class="in"><input id="fps" name="fps" type="number" min="0" max="1000" step="1" inputmode="numeric" placeholder="—" aria-describedby="err-fps"><i>fps</i></div>
+            <span class="pred" aria-hidden="true"></span>
+            <p class="field-error" id="err-fps" hidden></p>
           </div>
-        </fieldset>
+          <div class="rd metric" data-pred="UsoGPUAlto" data-op=">=" data-umbral="95">
+            <label class="sk" for="uso_gpu">Uso GPU<small>umbral ≥ 95 %</small></label>
+            <div class="in"><input id="uso_gpu" name="uso_gpu" type="number" min="0" max="100" step="1" inputmode="numeric" placeholder="—" aria-describedby="err-uso_gpu"><i>%</i></div>
+            <span class="pred" aria-hidden="true"></span>
+            <p class="field-error" id="err-uso_gpu" hidden></p>
+          </div>
+          <div class="rd metric" data-pred="UsoCPUAlto" data-op=">=" data-umbral="90">
+            <label class="sk" for="uso_cpu">Uso CPU<small>umbral ≥ 90 %</small></label>
+            <div class="in"><input id="uso_cpu" name="uso_cpu" type="number" min="0" max="100" step="1" inputmode="numeric" placeholder="—" aria-describedby="err-uso_cpu"><i>%</i></div>
+            <span class="pred" aria-hidden="true"></span>
+            <p class="field-error" id="err-uso_cpu" hidden></p>
+          </div>
+          <div class="rd metric" data-pred="RAMLlena" data-op=">=" data-umbral="90">
+            <label class="sk" for="uso_ram">Uso RAM<small>umbral ≥ 90 %</small></label>
+            <div class="in"><input id="uso_ram" name="uso_ram" type="number" min="0" max="100" step="1" inputmode="numeric" placeholder="—" aria-describedby="err-uso_ram"><i>%</i></div>
+            <span class="pred" aria-hidden="true"></span>
+            <p class="field-error" id="err-uso_ram" hidden></p>
+          </div>
+          <div class="rd metric" data-pred="TempAlta" data-op=">" data-umbral="90">
+            <label class="sk" for="temperatura">Temperatura<small>umbral &gt; 90 °C</small></label>
+            <div class="in"><input id="temperatura" name="temperatura" type="number" min="0" max="150" step="1" inputmode="numeric" placeholder="—" aria-describedby="err-temperatura"><i>°C</i></div>
+            <span class="pred" aria-hidden="true"></span>
+            <p class="field-error" id="err-temperatura" hidden></p>
+          </div>
+          <div class="rd metric" data-pred="PingAlto" data-op=">" data-umbral="100">
+            <label class="sk" for="ping">Ping<small>umbral &gt; 100 ms</small></label>
+            <div class="in"><input id="ping" name="ping" type="number" min="0" max="5000" step="1" inputmode="numeric" placeholder="—" aria-describedby="err-ping"><i>ms</i></div>
+            <span class="pred" aria-hidden="true"></span>
+            <p class="field-error" id="err-ping" hidden></p>
+          </div>
+        </div>
 
-        <fieldset class="group">
-          <legend><svg class="ico ico--sm"><use href="#i-gamepad"/></svg> Síntomas y configuración</legend>
-          <div class="field">
-            <div class="label-row"><span class="label" id="lbl-calidad">Calidad gráfica</span><span class="pred" aria-hidden="true"></span></div>
-            <div class="segmented" role="radiogroup" aria-labelledby="lbl-calidad" data-name="calidad_graficos" data-pred="GraficosAltos" data-true="alta,ultra">
+        <h3 class="form__sub">Síntomas y configuración</h3>
+        <div class="sym">
+          <div class="sym__row sym__row--wide">
+            <div class="sym__label"><span id="lbl-calidad">Calidad gráfica</span><span class="pred" aria-hidden="true"></span></div>
+            <div class="segmented" role="radiogroup" aria-labelledby="lbl-calidad" data-pred="GraficosAltos" data-true="alta,ultra">
               <label><input type="radio" name="calidad_graficos" value="baja"><span>Baja</span></label>
               <label><input type="radio" name="calidad_graficos" value="media"><span>Media</span></label>
               <label><input type="radio" name="calidad_graficos" value="alta"><span>Alta</span></label>
@@ -143,157 +150,129 @@
               <label><input type="radio" name="calidad_graficos" value="" checked><span>No sé</span></label>
             </div>
           </div>
-          <div class="field">
-            <div class="label-row"><span class="label" id="lbl-fpscaen">¿Los FPS bajan después de varios minutos?</span><span class="pred" aria-hidden="true"></span></div>
-            <div class="segmented" role="radiogroup" aria-labelledby="lbl-fpscaen" data-name="fps_caen" data-pred="FPSCaenConTiempo" data-true="si">
+          <div class="sym__row">
+            <div class="sym__label"><span id="lbl-fpscaen">FPS caen con el tiempo</span><span class="pred" aria-hidden="true"></span></div>
+            <div class="segmented" role="radiogroup" aria-labelledby="lbl-fpscaen" data-pred="FPSCaenConTiempo" data-true="si">
               <label><input type="radio" name="fps_caen" value="si"><span>Sí</span></label>
               <label><input type="radio" name="fps_caen" value="no"><span>No</span></label>
               <label><input type="radio" name="fps_caen" value="" checked><span>No sé</span></label>
             </div>
           </div>
-          <div class="field">
-            <div class="label-row"><span class="label" id="lbl-tirones">¿Hay tirones o congelamientos breves?</span><span class="pred" aria-hidden="true"></span></div>
-            <div class="segmented" role="radiogroup" aria-labelledby="lbl-tirones" data-name="tirones" data-pred="Tirones" data-true="si">
+          <div class="sym__row">
+            <div class="sym__label"><span id="lbl-tirones">Tirones o congelamientos</span><span class="pred" aria-hidden="true"></span></div>
+            <div class="segmented" role="radiogroup" aria-labelledby="lbl-tirones" data-pred="Tirones" data-true="si">
               <label><input type="radio" name="tirones" value="si"><span>Sí</span></label>
               <label><input type="radio" name="tirones" value="no"><span>No</span></label>
               <label><input type="radio" name="tirones" value="" checked><span>No sé</span></label>
             </div>
           </div>
-          <div class="field">
-            <div class="label-row"><span class="label" id="lbl-disco">Disco donde está instalado el juego</span><span class="pred" aria-hidden="true"></span></div>
-            <div class="segmented" role="radiogroup" aria-labelledby="lbl-disco" data-name="almacenamiento" data-pred="JuegoEnHDD" data-true="hdd">
+          <div class="sym__row">
+            <div class="sym__label"><span id="lbl-disco">Disco del juego</span><span class="pred" aria-hidden="true"></span></div>
+            <div class="segmented" role="radiogroup" aria-labelledby="lbl-disco" data-pred="JuegoEnHDD" data-true="hdd">
               <label><input type="radio" name="almacenamiento" value="ssd"><span>SSD</span></label>
               <label><input type="radio" name="almacenamiento" value="hdd"><span>HDD</span></label>
               <label><input type="radio" name="almacenamiento" value="" checked><span>No sé</span></label>
             </div>
           </div>
-          <div class="field">
-            <div class="label-row"><span class="label" id="lbl-conexion">Conexión a internet</span><span class="pred" aria-hidden="true"></span></div>
-            <div class="segmented" role="radiogroup" aria-labelledby="lbl-conexion" data-name="conexion" data-pred="ConexionWiFi" data-true="wifi">
+          <div class="sym__row">
+            <div class="sym__label"><span id="lbl-conexion">Conexión a internet</span><span class="pred" aria-hidden="true"></span></div>
+            <div class="segmented" role="radiogroup" aria-labelledby="lbl-conexion" data-pred="ConexionWiFi" data-true="wifi">
               <label><input type="radio" name="conexion" value="wifi"><span>WiFi</span></label>
               <label><input type="radio" name="conexion" value="cable"><span>Cable</span></label>
               <label><input type="radio" name="conexion" value="" checked><span>No sé</span></label>
             </div>
           </div>
-        </fieldset>
-
-        <div id="errores" class="alert alert--error" role="alert" hidden></div>
-
-        <div class="actions">
-          <button type="submit" id="btn-diagnosticar" class="btn btn--primary">
-            <span class="spinner" aria-hidden="true"></span><svg class="ico btn__ico" aria-hidden="true"><use href="#i-bolt"/></svg><span class="btn__text">Diagnosticar</span>
-          </button>
-          <button type="button" id="btn-limpiar" class="btn btn--ghost"><svg class="ico ico--sm" aria-hidden="true"><use href="#i-reset"/></svg>Limpiar</button>
         </div>
-        <p class="hint center">Deje vacío o en «No sé» lo que no conozca: el sistema no lo tomará como falso.</p>
+
+        <p class="hint form__note">Lo que quede vacío o en «No sé» queda desconocido: el sistema no lo toma como falso.</p>
+        <!-- Barra fija al pie del módulo: "Diagnosticar" siempre a la vista -->
+        <div class="actions">
+          <button type="submit" id="btn-diagnosticar" class="btn btn--primary"><span class="spinner" aria-hidden="true"></span><span class="btn__text">Diagnosticar</span></button>
+          <button type="button" id="btn-limpiar" class="btn btn--ghost">Limpiar</button>
+        </div>
       </form>
 
-      <!-- --------- Resultados --------- -->
-      <section id="resultados" class="results" aria-live="polite" aria-busy="false">
-        <div class="card empty" id="vacio">
-          <div class="empty__icon" aria-hidden="true"><svg class="ico"><use href="#i-gamepad"/></svg></div>
-          <h2>Listo para diagnosticar</h2>
-          <p>Ingrese las lecturas y síntomas del equipo, o cargue uno de los casos de prueba, y presione
-            <strong>Diagnosticar</strong>.</p>
-          <div class="empty__keys"><span class="kbd">1</span> Lecturas <span class="kbd">2</span> Diagnosticar <span class="kbd">3</span> ¿Por qué?</div>
+      <!-- --------- Módulo central: el motor sobre la placa --------- -->
+      <!-- La placa no va en una tarjeta: está montada directamente sobre el circuito,
+           entre dos tiras de pines, con la máscara morada visible detrás. -->
+      <section class="motor" id="resultados" aria-labelledby="titulo-motor">
+        <div class="motor__head">
+          <h2 id="titulo-motor" tabindex="-1">Motor de inferencia</h2>
+          <span class="mono mod__meta" id="motor-meta">en espera · 15 reglas</span>
         </div>
-
-        <!-- Animación del motor razonando (decorativa; dura menos de 1 s) -->
-        <div class="card scan" id="escaneo" hidden>
-          <div class="scan__beam" aria-hidden="true"></div>
-          <h2 class="card__title"><svg class="ico"><use href="#i-chip"/></svg> Motor de inferencia en ejecución</h2>
-          <ol class="scan__steps">
-            <li style="--i:0">Convirtiendo lecturas en hechos</li>
-            <li style="--i:1">Match: buscando reglas activadas</li>
-            <li style="--i:2">Modus Ponens + factores de certeza</li>
-            <li style="--i:3">Punto fijo alcanzado</li>
-          </ol>
+        <div class="motor__placa">
+          <span class="motor__seda" aria-hidden="true">U1 · SBC-R15</span>
+          <div class="placa-wrap">
+            <svg id="placa" class="placa" role="img" aria-label="Placa de inferencia: hechos, reglas, diagnósticos y recomendaciones"></svg>
+            <p class="placa__vacio" id="placa-vacio">Cargue un caso de prueba o ingrese lecturas y presione <b>Diagnosticar</b>: la señal recorrerá la placa regla por regla.</p>
+          </div>
+          <div class="placa__pie">
+          <div class="riel" id="riel" aria-hidden="true"></div>
+          <div class="leyenda" aria-hidden="true">
+            <span><i class="lg lg--v"></i>Hecho verdadero</span><span><i class="lg lg--f"></i>Hecho falso</span><span><i class="lg lg--u"></i>Sin dato</span>
+            <span><i class="lg lg--d"></i>Diagnóstico</span><span><i class="lg lg--r"></i>Recomendación</span>
+          </div>
+          </div>
         </div>
-
-        <div id="contenido" hidden>
-          <div class="summary card" id="resumen"></div>
-
-          <div class="card card--warn" id="sin-conclusion" hidden>
-            <h2 class="card__title"><span class="step step--warn"><svg class="ico ico--sm"><use href="#i-alert"/></svg></span> No se pudo derivar ninguna conclusión</h2>
-            <p>Los hechos ingresados no completan ninguna regla de la base de conocimiento. Puede que el equipo
-              no tenga un problema dentro del alcance del sistema, o que falten datos. Use <strong>¿Por qué no…?</strong>
-              más abajo para ver qué condición faltó.</p>
-          </div>
-
-          <div class="card" id="bloque-mapa">
-            <h2 class="card__title"><span class="step"><svg class="ico ico--sm"><use href="#i-graph"/></svg></span> Mapa de inferencia
-              <span class="muted small">hechos → diagnósticos → recomendaciones</span></h2>
-            <div class="mapa-wrap"><svg id="mapa" class="mapa" role="img" aria-label="Mapa de inferencia"></svg></div>
-            <div class="mapa-leyenda" aria-hidden="true">
-              <span><i class="lg lg--v"></i>Hecho verdadero</span><span><i class="lg lg--f"></i>Hecho falso</span>
-              <span><i class="lg lg--d"></i>Diagnóstico</span><span><i class="lg lg--r"></i>Recomendación</span>
-              <span><i class="lg lg--e"></i>Regla disparada</span>
-            </div>
-          </div>
-
-          <div class="card" id="bloque-diagnosticos">
-            <h2 class="card__title"><span class="step step--diag">2</span> Diagnóstico</h2>
-            <div id="diagnosticos" class="conclusions"></div>
-          </div>
-
-          <div class="card" id="bloque-recomendaciones">
-            <h2 class="card__title"><span class="step step--rec">3</span> Recomendaciones <span class="muted small">(ordenadas por certeza)</span></h2>
-            <div id="recomendaciones" class="conclusions"></div>
-          </div>
-
-          <div class="card">
-            <h2 class="card__title"><span class="step">4</span> Explicación del razonamiento</h2>
-            <h3 class="subtitle">Hechos iniciales</h3>
-            <div id="hechos" class="chips"></div>
-            <h3 class="subtitle">Reglas aplicadas en orden</h3>
-            <ol id="cadena" class="chain"></ol>
-          </div>
-
-          <div class="card">
-            <h2 class="card__title"><span class="step"><svg class="ico ico--sm"><use href="#i-help"/></svg></span> ¿Por qué no…?</h2>
-            <p class="muted small">Elija una conclusión que el sistema <em>no</em> alcanzó para ver qué condiciones faltaron.</p>
-            <div class="row">
-              <select id="porque-no-select" aria-label="Conclusión no alcanzada"></select>
-              <button type="button" id="btn-porque-no" class="btn btn--ghost">Explicar</button>
-            </div>
-            <div id="porque-no-resultado"></div>
-          </div>
-
-          <details class="card log">
-            <summary><svg class="ico ico--sm" aria-hidden="true"><use href="#i-term"/></svg> Registro (log) del motor de inferencia</summary>
-            <pre id="log"></pre>
-          </details>
+        <div class="mod cadena" id="cadena-wrap" hidden>
+          <div class="cadena__head"><h3>Encadenamiento hacia adelante</h3><span class="mono" id="cadena-meta"></span></div>
+          <div id="cadena"></div>
         </div>
       </section>
+
+      <!-- --------- Módulo: veredicto y explicaciones --------- -->
+      <aside class="mod vd" id="veredicto" aria-labelledby="titulo-vd">
+        <h2 class="sr-only" id="titulo-vd">Veredicto</h2>
+        <span class="vd__u" aria-hidden="true">U9 · VEREDICTO</span>
+        <div id="vd-cuerpo">
+          <p class="vd__espera"><i class="led led--off" aria-hidden="true"></i>En espera de un diagnóstico.</p>
+        </div>
+        <section class="blk" aria-labelledby="titulo-porque">
+          <h3 id="titulo-porque">¿Por qué?</h3>
+          <div id="porque"><p class="hint">Elija una conclusión (en el veredicto o en el encadenamiento) para ver qué reglas y lecturas la sostienen.</p></div>
+        </section>
+        <section class="blk" aria-labelledby="titulo-porque-no">
+          <h3 id="titulo-porque-no">¿Por qué no…?</h3>
+          <div class="row">
+            <select id="porque-no-select" aria-label="Conclusión no alcanzada" disabled><option value="">Primero haga un diagnóstico</option></select>
+            <button type="button" id="btn-porque-no" class="btn btn--ghost" disabled>Explicar</button>
+          </div>
+          <div id="porque-no-resultado"></div>
+        </section>
+      </aside>
     </div>
+
+    <details class="mod log" id="extra" hidden>
+      <summary>Registro (log) del motor de inferencia</summary>
+      <pre id="log"></pre>
+    </details>
   </section>
 
   <!-- ======================= PESTAÑA BASE DE CONOCIMIENTO ======================= -->
   <section id="tab-base" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-base" hidden>
-    <h2 class="sr-only" id="titulo-base">Base de conocimiento</h2>
-    <div class="kb-stats" id="kb-stats"></div>
-    <div class="card">
-      <h2 class="card__title">Predicados observables (hechos de entrada)</h2>
-      <p class="muted small" id="tipo-predicados"></p>
+    <h2 class="sr-only">Base de conocimiento</h2>
+    <section class="mod kb" aria-labelledby="titulo-predicados">
+      <div class="mod__head"><h3 id="titulo-predicados">Predicados observables (hechos de entrada)</h3><span class="mono mod__meta" id="kb-stats"></span></div>
+      <p class="hint kb__tipo mono" id="tipo-predicados"></p>
       <div class="table-wrap"><table id="tabla-predicados">
-        <thead><tr><th>Predicado</th><th>Significado</th><th>Se calcula con</th><th>Categoría</th></tr></thead>
+        <thead><tr><th scope="col">Predicado</th><th scope="col">Significado</th><th scope="col">Se calcula con</th><th scope="col">Categoría</th></tr></thead>
         <tbody></tbody>
       </table></div>
-    </div>
-    <div class="card">
-      <h2 class="card__title">Reglas de producción <span id="estado-ciclos" class="badge"></span></h2>
+    </section>
+    <section class="mod kb" aria-labelledby="titulo-reglas">
+      <div class="mod__head"><h3 id="titulo-reglas">Reglas de producción</h3><span id="estado-ciclos" class="badge"></span></div>
       <div class="table-wrap"><table id="tabla-reglas">
-        <thead><tr><th>Regla</th><th>Lógica de predicados</th><th>SI – ENTONCES</th><th>FC</th><th>Justificación</th></tr></thead>
+        <thead><tr><th scope="col">Regla</th><th scope="col">Lógica de predicados</th><th scope="col">SI – ENTONCES</th><th scope="col">FC</th><th scope="col">Justificación</th></tr></thead>
         <tbody></tbody>
       </table></div>
-    </div>
+    </section>
   </section>
 </main>
 
 <div id="toast" class="toast" role="status" hidden></div>
 
 <footer class="footer">
-  Inteligencia Artificial II · Proyecto final · Juan F. Vanegas Silva &amp; Diego F. Almanza Vanegas · Fundación Universitaria Los Libertadores
+  Inteligencia Artificial II · Proyecto final · Juan F. Vanegas Silva &amp; Diego F. Almanza Ruiz · Fundación Universitaria Los Libertadores
 </footer>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>

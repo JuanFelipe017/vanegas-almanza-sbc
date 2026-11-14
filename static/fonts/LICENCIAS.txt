@@ -1,0 +1,7 @@
+Fuentes incluidas para que la interfaz funcione igual sin internet (descargadas de Google Fonts, subconjunto latino):
+
+- Oxanium (oxanium-latin.woff2) — SIL Open Font License 1.1 — https://fonts.google.com/specimen/Oxanium
+- Manrope (manrope-latin.woff2) — SIL Open Font License 1.1 — https://fonts.google.com/specimen/Manrope
+- JetBrains Mono (jetbrains-mono-latin.woff2) — SIL Open Font License 1.1 — https://fonts.google.com/specimen/JetBrains+Mono
+
+Texto completo de la licencia: https://openfontlicense.org

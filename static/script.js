@@ -1,5 +1,5 @@
-// Interfaz del sistema experto: lee el formulario, llama a la API Flask y muestra los resultados.
-// Toda la lógica de inferencia vive en el backend (src/motor_inferencia.py); aquí solo se dibuja.
+// Interfaz del sistema experto: lee el formulario, llama a la API Flask y dibuja el resultado
+// sobre la placa de circuito. Toda la lógica de inferencia vive en el backend (src/motor_inferencia.py).
 "use strict";
 
 const $ = (sel) => document.querySelector(sel);
@@ -8,10 +8,27 @@ const CAMPOS_RADIO = ["calidad_graficos", "fps_caen", "tirones", "almacenamiento
 // data-motion lo fija el <head> según prefers-reduced-motion o la elección guardada del usuario.
 const reducirMovimiento = () => document.documentElement.dataset.motion === "off";
 
+let BASE = null;            // respuesta de /api/base
+let ultimosDatos = null;    // formulario de la última consulta (para "¿Por qué no?")
+let ultimoResultado = null; // respuesta de la última consulta (para "¿Por qué?")
+let casoActual = null;      // caso de prueba cargado (se olvida si el usuario edita el formulario)
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pct = (fc) => Math.round(fc * 100);
+const fc2 = (x) => Number(x).toFixed(2);
+const notacion = (pred, valor, equipo) => `${valor ? "" : "¬"}${pred}(${equipo})`;
+const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
+// Ritmo de la animación: cada iteración del motor dura PASO ms en la placa.
+const INICIO = 350, PASO = 1000;
+const tIter = (it) => INICIO + (it - 1) * PASO;
+
+// ------------------------------------------------------------------ Animaciones (botón)
 function pintarBotonEfectos() {
   const on = !reducirMovimiento();
   $("#btn-efectos").setAttribute("aria-pressed", on);
-  $("#efectos-estado").textContent = on ? "ON" : "OFF";
+  $("#efectos-estado").textContent = on ? "Sí" : "No";
 }
 
 function alternarEfectos() {
@@ -19,17 +36,8 @@ function alternarEfectos() {
   document.documentElement.dataset.motion = nuevo;
   try { localStorage.setItem("sbc-motion", nuevo); } catch {}
   pintarBotonEfectos();
-  toast(nuevo === "on" ? "Efectos visuales activados" : "Efectos visuales desactivados");
+  toast(nuevo === "on" ? "Animaciones activadas" : "Animaciones desactivadas");
 }
-const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
-
-let BASE = null;          // respuesta de /api/base
-let ultimosDatos = null;  // formulario de la última consulta (para "¿Por qué no?")
-
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
-  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const pct = (fc) => Math.round(fc * 100);
-const notacion = (pred, valor, equipo) => `${valor ? "" : "¬"}${pred}(${equipo})`;
 
 // ------------------------------------------------------------------ API
 async function api(url, cuerpo) {
@@ -55,27 +63,51 @@ function leerFormulario() {
   return datos;
 }
 
+function marcarCampo(input, mensaje) {
+  const error = $("#err-" + input.id);
+  if (mensaje) {
+    input.setAttribute("aria-invalid", "true");
+    error.textContent = mensaje;
+    error.hidden = false;
+  } else {
+    input.removeAttribute("aria-invalid");
+    error.textContent = "";
+    error.hidden = true;
+  }
+}
+
+// Devuelve [{campo, mensaje}]; campo es null para errores generales.
 function validarFormulario(datos) {
   const errores = [];
   CAMPOS_NUMERICOS.forEach((c) => {
     const input = $("#" + c);
-    input.classList.remove("is-invalid");
+    marcarCampo(input, null);
     if (datos[c] === "") return;
     const v = Number(datos[c]);
     const min = Number(input.min), max = Number(input.max);
     if (!Number.isFinite(v) || v < min || v > max) {
-      void input.offsetWidth;                       // reinicia la animación de "sacudir"
-      input.classList.add("is-invalid");
-      const etiqueta = document.querySelector(`label[for="${c}"]`).textContent;
-      errores.push(`${etiqueta}: debe ser un número entre ${min} y ${max}.`);
+      const etiqueta = document.querySelector(`label[for="${c}"]`).firstChild.textContent.trim();
+      const mensaje = `Escriba un número entre ${min} y ${max}.`;
+      marcarCampo(input, mensaje);
+      errores.push({ campo: c, mensaje: `${etiqueta}: ${mensaje.toLowerCase()}` });
     }
   });
   const algunDato = CAMPOS_NUMERICOS.some((c) => datos[c] !== "") || CAMPOS_RADIO.some((c) => datos[c] !== "");
-  if (!algunDato && !errores.length) errores.push("Ingrese al menos una lectura o síntoma para poder diagnosticar.");
+  if (!algunDato && !errores.length) {
+    errores.push({ campo: null, mensaje: "Ingrese al menos una lectura o un síntoma para poder diagnosticar." });
+  }
   return errores;
 }
 
-// Vista previa en vivo del predicado que generará cada campo (solo visual: decide entrada.py).
+function mostrarErrores(errores) {
+  const caja = $("#errores");
+  if (!errores.length) { caja.hidden = true; caja.innerHTML = ""; return; }
+  caja.innerHTML = errores.length === 1 ? esc(errores[0].mensaje)
+    : `Revise estos datos:<ul>${errores.map((e) => `<li>${esc(e.mensaje)}</li>`).join("")}</ul>`;
+  caja.hidden = false;
+}
+
+// Vista previa del predicado que generará cada campo (solo visual: decide entrada.py).
 function actualizarChip(chip, valor) {
   const antes = chip.textContent;
   chip.classList.remove("is-true", "is-false");
@@ -84,41 +116,34 @@ function actualizarChip(chip, valor) {
     chip.textContent = `${chip.dataset.pred} = ${valor ? "V" : "F"}`;
     chip.classList.add(valor ? "is-true" : "is-false");
   }
-  if (antes !== chip.textContent) {
+  if (antes && antes !== chip.textContent) {
     chip.classList.remove("is-pop"); void chip.offsetWidth; chip.classList.add("is-pop");
   }
 }
 
-function actualizarMedidor(campo) {
+function actualizarMetrica(campo) {
   const caja = campo.closest(".metric");
-  const { op, umbral, max, pred } = caja.dataset;
+  const { op, umbral, pred } = caja.dataset;
   const chip = caja.querySelector(".pred");
   chip.dataset.pred = pred;
   const v = campo.value.trim() === "" ? NaN : Number(campo.value);
-  const u = Number(umbral), m = Number(max);
-  caja.style.setProperty("--u", `${Math.min(100, (u / m) * 100)}%`);
   const fueraDeRango = v < Number(campo.min) || v > Number(campo.max);
-  if (!Number.isFinite(v) || fueraDeRango) {      // vacío o inválido: el servidor no lo usaría
-    caja.style.setProperty("--p", 0);
-    caja.classList.remove("is-true");
-    actualizarChip(chip, null);
-    return;
-  }
+  if (!Number.isFinite(v) || fueraDeRango) { actualizarChip(chip, null); caja.classList.remove("on"); return; }
+  const u = Number(umbral);
   const verdadero = op === "<" ? v < u : op === ">=" ? v >= u : v > u;
-  caja.style.setProperty("--p", Math.max(0, Math.min(1, v / m)));
-  caja.classList.toggle("is-true", verdadero);
   actualizarChip(chip, verdadero);
+  caja.classList.toggle("on", verdadero);   // pista de oro desde el chip hasta el borde del módulo
 }
 
 function actualizarSegmento(grupo) {
-  const chip = grupo.closest(".field").querySelector(".pred");
+  const chip = grupo.closest(".sym__row").querySelector(".pred");
   chip.dataset.pred = grupo.dataset.pred;
   const valor = grupo.querySelector("input:checked")?.value || "";
   actualizarChip(chip, valor === "" ? null : grupo.dataset.true.split(",").includes(valor));
 }
 
 function refrescarIndicadores() {
-  CAMPOS_NUMERICOS.forEach((c) => actualizarMedidor($("#" + c)));
+  CAMPOS_NUMERICOS.forEach((c) => actualizarMetrica($("#" + c)));
   document.querySelectorAll(".segmented[data-pred]").forEach(actualizarSegmento);
 }
 
@@ -127,8 +152,7 @@ function llenarFormulario(datos, equipo) {
   $("#equipo").value = equipo || "";
   CAMPOS_NUMERICOS.forEach((c) => { if (datos[c] !== undefined) $("#" + c).value = datos[c]; });
   CAMPOS_RADIO.forEach((c) => {
-    const valor = datos[c] ?? "";
-    const radio = document.querySelector(`input[name="${c}"][value="${valor}"]`);
+    const radio = document.querySelector(`input[name="${c}"][value="${datos[c] ?? ""}"]`);
     if (radio) radio.checked = true;
   });
   refrescarIndicadores();
@@ -136,28 +160,33 @@ function llenarFormulario(datos, equipo) {
 
 function limpiarFormulario(tambienResultados = true) {
   $("#formulario").reset();
-  document.querySelectorAll(".is-invalid").forEach((el) => el.classList.remove("is-invalid"));
+  CAMPOS_NUMERICOS.forEach((c) => marcarCampo($("#" + c), null));
   mostrarErrores([]);
   refrescarIndicadores();
-  if (tambienResultados) {
-    $("#caso").value = "";
-    $("#caso-desc").textContent = "";
-    $("#contenido").hidden = true;
-    $("#escaneo").hidden = true;
-    $("#vacio").hidden = false;
-    ultimosDatos = null;
-  }
-}
-
-function mostrarErrores(errores) {
-  const caja = $("#errores");
-  if (!errores.length) { caja.hidden = true; caja.innerHTML = ""; return; }
-  caja.innerHTML = errores.length === 1 ? esc(errores[0])
-    : `Revise los datos:<ul>${errores.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>`;
-  caja.hidden = false;
+  casoActual = null;
+  if (!tambienResultados) return;
+  $("#caso").value = "";
+  $("#caso-desc").textContent = "";
+  ultimosDatos = ultimoResultado = null;
+  $("#resultados").classList.remove("is-stale");
+  $("#veredicto").classList.remove("is-stale", "is-on", "is-none");
+  if (BASE) construirPlaca(null);
+  $("#placa-vacio").hidden = false;
+  $("#cadena-wrap").hidden = true;
+  $("#extra").hidden = true;
+  $("#motor-meta").textContent = `en espera · ${BASE ? BASE.reglas.length : 15} reglas`;
+  $("#tab-count-diag").textContent = "";
+  $("#vd-cuerpo").innerHTML = `<p class="vd__espera"><i class="led led--off" aria-hidden="true"></i>En espera de un diagnóstico.</p>`;
+  $("#porque").innerHTML = `<p class="hint">Elija una conclusión (en el veredicto o en el encadenamiento) para ver qué reglas y lecturas la sostienen.</p>`;
+  $("#porque-no-select").innerHTML = `<option value="">Primero haga un diagnóstico</option>`;
+  $("#porque-no-select").disabled = true;
+  $("#btn-porque-no").disabled = true;
+  $("#porque-no-resultado").innerHTML = "";
 }
 
 function toast(mensaje, tipo = "ok") {
+  // En celular el aviso taparía los resultados; el resultado ya se anuncia en #anuncio.
+  if (tipo !== "error" && matchMedia("(max-width: 760px)").matches) return;
   const t = $("#toast");
   t.hidden = true;                       // al volver a mostrarse, @starting-style repite la entrada
   t.textContent = mensaje;
@@ -181,253 +210,311 @@ async function diagnosticar(evento) {
   const datos = leerFormulario();
   const errores = validarFormulario(datos);
   mostrarErrores(errores);
-  if (errores.length) { toast("Hay datos por corregir", "error"); return; }
+  if (errores.length) {
+    // El resultado anterior ya no corresponde a lo que está escrito: se atenúa.
+    if (ultimoResultado) { $("#resultados").classList.add("is-stale"); $("#veredicto").classList.add("is-stale"); }
+    const primero = errores.find((e) => e.campo);
+    (primero ? $("#" + primero.campo) : $("#errores")).focus();
+    return;
+  }
 
   cargando(true);
-  $("#vacio").hidden = true;
-  $("#contenido").hidden = true;
-  $("#escaneo").hidden = false;
   try {
-    // La animación del motor dura lo mínimo para verse; con movimiento reducido no se espera.
-    const [r] = await Promise.all([api("/api/diagnosticar", datos), esperar(reducirMovimiento() ? 0 : 950)]);
+    const r = await api("/api/diagnosticar", datos);
     ultimosDatos = datos;
-    $("#escaneo").hidden = true;
+    ultimoResultado = r;
     mostrarResultado(r);
-    const n = r.diagnosticos.length + r.recomendaciones.length;
-    toast(r.sin_conclusion ? "Sin conclusión: faltan datos o no hay problema"
-      : `${n} conclusiones en ${r.iteraciones} iteraciones`, r.sin_conclusion ? "error" : "ok");
+    const top = r.diagnosticos[0] || r.recomendaciones[0];
+    $("#anuncio").textContent = r.sin_conclusion
+      ? "Sin conclusión: con estos datos ninguna regla se cumple."
+      : `${r.diagnosticos.length} diagnósticos y ${r.recomendaciones.length} recomendaciones en ${r.iteraciones} iteraciones. Veredicto: ${top.titulo}, certeza ${pct(top.certeza)} %.`;
+    // Sin aviso flotante: el resultado ya se ve en la placa, en el veredicto y en la línea de estado del motor.
+    if (matchMedia("(max-width: 900px)").matches) {
+      $("#resultados").scrollIntoView({ behavior: reducirMovimiento() ? "auto" : "smooth", block: "start" });
+    }
   } catch (errs) {
-    $("#escaneo").hidden = true;
-    $("#vacio").hidden = false;
-    mostrarErrores(Array.isArray(errs) ? errs : [String(errs)]);
-    toast("No se pudo diagnosticar", "error");
+    mostrarErrores([].concat(errs).map((m) => ({ campo: null, mensaje: String(m) })));
+    $("#errores").focus();
   } finally {
     cargando(false);
   }
 }
 
-function contar(el, hasta, duracion = 700) {
-  if (reducirMovimiento() || hasta === 0) { el.textContent = hasta; return; }
-  const inicio = performance.now();
-  const paso = (t) => {
-    const k = Math.min(1, (t - inicio) / duracion);
-    el.textContent = Math.round(hasta * (1 - Math.pow(1 - k, 3)));
-    if (k < 1) requestAnimationFrame(paso);
-  };
-  requestAnimationFrame(paso);
-}
-
 function mostrarResultado(r) {
-  $("#contenido").hidden = false;
+  $("#resultados").classList.remove("is-stale");
+  $("#veredicto").classList.remove("is-stale");
 
-  $("#resumen").innerHTML = `
-    <div class="stat stat--diag reveal" style="--i:0"><span class="stat__value" data-n="${r.diagnosticos.length}">0</span><span class="stat__label">Diagnósticos</span></div>
-    <div class="stat stat--rec reveal" style="--i:1"><span class="stat__value" data-n="${r.recomendaciones.length}">0</span><span class="stat__label">Recomendaciones</span></div>
-    <div class="stat stat--rule reveal" style="--i:2"><span class="stat__value" data-n="${r.reglas_aplicadas.length}">0</span><span class="stat__label">Reglas aplicadas</span></div>
-    <div class="stat reveal" style="--i:3"><span class="stat__value" data-n="${r.iteraciones}">0</span><span class="stat__label">${r.punto_fijo ? "Iter. · punto fijo" : "Iter. · límite"}</span></div>
-    <span class="summary__equipo reveal" style="--i:4">x = ${esc(r.equipo)}</span>`;
-  document.querySelectorAll("#resumen [data-n]").forEach((el) => contar(el, Number(el.dataset.n)));
+  // La placa de fondo también recibe la señal.
+  document.body.classList.remove("is-run"); void document.body.offsetWidth; document.body.classList.add("is-run");
 
-  $("#sin-conclusion").hidden = !r.sin_conclusion;
-  $("#bloque-diagnosticos").hidden = r.sin_conclusion;
-  $("#bloque-recomendaciones").hidden = r.sin_conclusion;
-  $("#diagnosticos").innerHTML = tarjetas(r.diagnosticos, "diag", r.equipo, "Ningún diagnóstico.");
-  $("#recomendaciones").innerHTML = tarjetas(r.recomendaciones, "rec", r.equipo,
-    "Hay diagnóstico, pero faltan datos para recomendar una acción (por ejemplo, la calidad gráfica).");
-  animarAnillos();
+  $("#placa-vacio").hidden = true;
+  construirPlaca(r);
+  const origen = casoActual ? `Caso ${casoActual.id}` : "Consulta manual";
+  const meta = `${origen} · ${r.reglas_aplicadas.length} reglas disparadas · ${r.iteraciones} iteraciones`;
+  $("#motor-meta").textContent = meta;
+  $("#cadena-meta").textContent = r.punto_fijo ? "punto fijo" : "límite de iteraciones";
+  $("#cadena").innerHTML = cadenaHTML(r);
+  $("#cadena-wrap").hidden = false;
+  pintarVeredicto(r);
 
-  pintarMapa(r);
-
-  $("#hechos").innerHTML = r.hechos_iniciales.map((h, i) => `
-    <span class="chip reveal ${h.valor ? "" : "chip--false"}" style="--i:${i}" title="${esc(BASE?.predicados[h.predicado]?.descripcion)}">
-      <span class="code">${esc(h.notacion)}</span><small>${esc(h.lectura)}</small>
-    </span>`).join("");
-
-  const lista = $("#cadena");
-  lista.innerHTML = cadena(r);
-  lista.classList.remove("is-drawn"); void lista.offsetWidth; lista.classList.add("is-drawn");
-
-  $("#log").innerHTML = r.log.map((l, i) => `<span style="--i:${i}">${esc(l)}</span>`).join("");
+  $("#tab-count-diag").textContent = r.sin_conclusion ? "· sin conclusión"
+    : `· ${r.diagnosticos.length} ${r.diagnosticos.length === 1 ? "diagnóstico" : "diagnósticos"}`;
+  $("#log").textContent = r.log.join("\n");
+  $("#extra").hidden = false;
 
   const select = $("#porque-no-select");
   select.innerHTML = r.no_alcanzadas.length
-    ? r.no_alcanzadas.map((p) => `<option value="${p}">${esc(p)} — ${esc(BASE.conclusiones[p].titulo)}</option>`).join("")
+    ? r.no_alcanzadas.map((p) => `<option value="${p}">${esc(BASE.conclusiones[p].titulo)} (${p})</option>`).join("")
     : `<option value="">Se alcanzaron todas las conclusiones</option>`;
+  select.disabled = !r.no_alcanzadas.length;
   $("#btn-porque-no").disabled = !r.no_alcanzadas.length;
   $("#porque-no-resultado").innerHTML = "";
+
+  const primera = r.diagnosticos[0] || r.recomendaciones[0];
+  if (primera) seleccionar(primera.predicado);
+  else $("#porque").innerHTML = `<p class="hint">No hay conclusiones que explicar. Use <b>¿Por qué no…?</b> para ver qué condición faltó en cada regla.</p>`;
 }
 
-function tarjetas(lista, tipo, equipo, vacio) {
-  if (!lista.length) return `<p class="empty-list">${esc(vacio)}</p>`;
-  return lista.map((c, i) => `
-    <article class="concl reveal ${tipo === "rec" ? "concl--rec" : ""}" style="--i:${i + 2}">
-      <div class="concl__head">
-        <div>
-          <div class="concl__title">${tipo === "rec" ? `<span class="concl__num">${String(i + 1).padStart(2, "0")}</span>` : ""}${esc(c.titulo)}</div>
-          <p class="concl__detail">${esc(c.detalle)}</p>
-        </div>
-        <div class="ring">
-          <progress class="ring__p" max="100" value="0" data-v="${pct(c.certeza)}" aria-label="Certeza ${pct(c.certeza)} %"></progress>
-          <span class="ring__txt" aria-hidden="true">${pct(c.certeza)}<small>%</small></span>
-        </div>
-      </div>
-      <div class="concl__meta">
-        <span class="code">${esc(c.notacion)}</span>
-        ${c.reglas.map((rg) => `<span class="badge">${rg}</span>`).join("")}
-        ${c.reglas.length > 1 ? `<span class="badge badge--comb">evidencia combinada</span>` : ""}
-        <button type="button" class="btn btn--link" data-why aria-expanded="false">
-          <svg class="ico ico--sm" aria-hidden="true"><use href="#i-tree"/></svg><span>¿Por qué?</span></button>
-      </div>
-      <div class="why" hidden><div class="why__inner">${arbolHTML(c.arbol, equipo)}</div></div>
-    </article>`).join("");
+// ------------------------------------------------------------------ La placa de inferencia (SVG)
+// Tres columnas de componentes: hechos observables → diagnósticos → recomendaciones.
+// Cada condición de cada regla es una pista de oro; las reglas disparadas se encienden
+// iteración por iteración y un pulso de señal las recorre.
+// Chips de dos líneas (nombre y "FC 0.80 · R2") para que se lean en el proyector.
+const PLACA = { W: 698, TOP: 40, PASO_FILA: 46, H_NODO: 38,
+  col: { hechos: { x: 0, w: 170 }, diagnostico: { x: 246, w: 180 }, recomendacion: { x: 502, w: 196 } } };
+
+function columnaDe(p) {
+  if (BASE.predicados[p]) return "hechos";
+  return BASE.conclusiones[p]?.tipo === "diagnostico" ? "diagnostico" : "recomendacion";
 }
 
-// Anillos de certeza: se insertan en 0 y en el siguiente cuadro suben a su valor (transición de --value).
-function animarAnillos() {
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    document.querySelectorAll(".ring__p[data-v]").forEach((p) => {
-      p.value = Number(p.dataset.v);
-      p.style.setProperty("--value", p.dataset.v);
-    });
-  }));
+// Pista con esquinas a 45°: sale horizontal, baja por su carril y entra horizontal al destino.
+function pista(x1, y1, carril, y2, x2) {
+  const s = 6;
+  if (Math.abs(y2 - y1) < 2 * s) return `M${x1} ${y1}H${carril}V${y2}H${x2}`;
+  const d = Math.sign(y2 - y1);
+  return `M${x1} ${y1}H${carril - s}L${carril} ${y1 + d * s}V${y2 - d * s}L${carril + s} ${y2}H${x2}`;
 }
 
-// Árbol "¿Por qué?": conclusión -> regla(s) que la soportan -> condiciones (recursivo).
-const arbolHTML = (nodo, equipo) => `<ul class="tree">${nodoHTML(nodo, equipo)}</ul>`;
-
-function nodoHTML(nodo, equipo) {
-  const texto = `<span class="code">${esc(notacion(nodo.predicado, nodo.valor, equipo))}</span>`;
-  if (nodo.tipo === "observado") return `<li class="node-obs">${texto} — hecho observado (FC = 1.0)</li>`;
-  if (nodo.tipo !== "derivado") return `<li class="node-no">${texto} — no se pudo concluir</li>`;
-  const soportes = nodo.soportes.map((s) => `
-      <li class="node-der"><span class="code">${esc(s.regla)}</span><span class="rule-tag">FC del paso = ${s.certeza_paso}</span>
-        <ul>${s.condiciones.map((h) => nodoHTML(h, equipo)).join("")}</ul></li>`).join("");
-  return `<li class="node-der">${texto}<span class="rule-tag">FC = ${nodo.certeza} · se concluyó porque se cumplen:</span>
-      <ul>${soportes}</ul></li>`;
+// Pista que cruza por encima de la columna de diagnósticos (hecho → recomendación).
+function pistaBus(x1, y1, c1, c2, y2, x2) {
+  const s = 6, bus = 26;
+  return `M${x1} ${y1}H${c1 - s}L${c1} ${y1 - s}V${bus + s}L${c1 + s} ${bus}H${c2 - s}L${c2} ${bus + s}V${y2 - s}L${c2 + s} ${y2}H${x2}`;
 }
 
-function alternarPorque(btn) {
-  const caja = btn.closest(".concl").querySelector(".why");
-  const abrir = btn.getAttribute("aria-expanded") !== "true";
-  btn.setAttribute("aria-expanded", abrir);
-  btn.querySelector("span").textContent = abrir ? "Ocultar explicación" : "¿Por qué?";
-  if (abrir) {
-    caja.hidden = false;
-    void caja.offsetWidth;                     // aplica block-size: 0 antes de animar hasta auto
-    caja.classList.add("is-open");
-  } else {
-    caja.classList.remove("is-open");
-    if (reducirMovimiento()) { caja.hidden = true; return; }
-    // Al terminar de cerrarse se oculta (sale del árbol de accesibilidad). Chrome puede reportar
-    // "height" en lugar de "block-size"; el temporizador cubre navegadores sin la transición.
-    const ocultar = () => { if (!caja.classList.contains("is-open")) caja.hidden = true; };
-    caja.addEventListener("transitionend", function fin(e) {
-      if (e.propertyName !== "block-size" && e.propertyName !== "height") return;
-      caja.removeEventListener("transitionend", fin);
-      ocultar();
-    });
-    setTimeout(ocultar, 600);
-  }
-}
+function construirPlaca(r) {
+  const svg = $("#placa");
+  const { W, TOP, PASO_FILA, H_NODO, col } = PLACA;
+  const listas = {
+    hechos: Object.keys(BASE.predicados),
+    diagnostico: Object.keys(BASE.conclusiones).filter((p) => BASE.conclusiones[p].tipo === "diagnostico"),
+    recomendacion: Object.keys(BASE.conclusiones).filter((p) => BASE.conclusiones[p].tipo === "recomendacion"),
+  };
+  const filas = listas.hechos.length;
+  const alto = TOP + filas * PASO_FILA + 4;
+  svg.setAttribute("viewBox", `0 0 ${W} ${alto}`);
 
-function cadena(r) {
-  if (!r.reglas_aplicadas.length) return `<li class="chain__end">No se aplicó ninguna regla: los hechos no alcanzan para un diagnóstico.</li>`;
-  let html = "", iter = 0;
-  const nombres = { 1: "diagnósticos", 2: "recomendaciones" };
-  r.reglas_aplicadas.forEach((p, i) => {
-    if (p.iteracion !== iter) {
-      iter = p.iteracion;
-      html += `<li class="chain__iter reveal" style="--i:${i}">Iteración ${iter}${nombres[iter] ? ` · ${nombres[iter]}` : ""}</li>`;
-    }
-    const si = p.condiciones.map((c) => notacion(c.predicado, c.valor, r.equipo)).join(" ∧ ");
-    const paso = `${p.certeza_regla} × min(${p.condiciones.map((c) => c.certeza).join(", ")}) = `;
-    const fc = p.combinada
-      ? `${paso}${p.certeza_paso}<br>${p.certeza_previa} + ${p.certeza_paso}·(1 − ${p.certeza_previa}) = <strong>${p.certeza_resultante}</strong>`
-      : `FC = ${paso}<strong>${p.certeza_paso}</strong>`;
-    html += `<li class="chain__step reveal" style="--i:${i + 1}">
-        <span class="chain__rule">${p.regla}</span>
-        <div><div class="code">${esc(si)} → ${esc(notacion(p.conclusion, true, r.equipo))}</div>
-          <div class="chain__desc">${esc(p.descripcion)}${p.combinada ? " · <em>combinación MYCIN</em>" : ""}</div></div>
-        <span class="chain__fc">${fc}</span>
-      </li>`;
+  const pos = {};
+  Object.entries(listas).forEach(([c, nodos]) => {
+    const desplaz = ((filas - nodos.length) * PASO_FILA) / 2;
+    nodos.forEach((p, i) => { pos[p] = { x: col[c].x, w: col[c].w, y: TOP + desplaz + i * PASO_FILA, c }; });
   });
-  html += `<li class="chain__end reveal" style="--i:${r.reglas_aplicadas.length + 1}">Iteración ${r.iteraciones}: ninguna regla nueva se activa → punto fijo, el motor se detiene.</li>`;
+  const centro = (p) => pos[p].y + H_NODO / 2;
+
+  // Estado del resultado
+  const hechos = Object.fromEntries((r?.hechos_iniciales || []).map((h) => [h.predicado, h]));
+  const disparo = {};    // regla -> paso (primera vez)
+  (r?.reglas_aplicadas || []).forEach((p) => { if (!disparo[p.regla]) disparo[p.regla] = p; });
+  const finales = Object.fromEntries([...(r?.diagnosticos || []), ...(r?.recomendaciones || [])].map((c) => [c.predicado, c]));
+  const llegada = {};    // conclusión -> iteración en que se concluyó por primera vez
+  (r?.reglas_aplicadas || []).forEach((p) => { if (!(p.conclusion in llegada)) llegada[p.conclusion] = p.iteracion; });
+
+  // Carriles: cada regla tiene su propio carril vertical en el hueco que cruza.
+  const carriles = {};
+  ["diagnostico", "recomendacion"].forEach((tipo) => {
+    const reglas = BASE.reglas.filter((rg) => BASE.conclusiones[rg.conclusion].tipo === tipo);
+    const ini = tipo === "diagnostico" ? col.hechos.w + 14 : col.diagnostico.x + col.diagnostico.w + 14;
+    const hueco = (tipo === "diagnostico" ? col.diagnostico.x - col.hechos.w : col.recomendacion.x - col.diagnostico.x - col.diagnostico.w) - 28;
+    reglas.forEach((rg, i) => { carriles[rg.nombre] = ini + (reglas.length > 1 ? (hueco * i) / (reglas.length - 1) : hueco / 2); });
+  });
+  const carrilHueco1 = (i) => col.hechos.w + 14 + i * 5;   // carriles del bus (hecho → recomendación)
+
+  let pistas = "", pulsos = "", etiquetas = "", vias = "", nodos = "", bus = 0;
+  BASE.reglas.forEach((rg) => {
+    const destino = rg.conclusion;
+    if (!pos[destino]) return;
+    const paso = disparo[rg.nombre];
+    const d = paso ? tIter(paso.iteracion) : 0;
+    const on = paso ? " on" : "";
+    const x2 = pos[destino].x, y2 = centro(destino), carril = carriles[rg.nombre];
+    rg.condiciones.forEach(([p, valor]) => {
+      if (!pos[p]) return;
+      const x1 = pos[p].x + pos[p].w, y1 = centro(p);
+      const cruza = pos[p].c === "hechos" && pos[destino].c === "recomendacion";
+      const dPath = cruza ? pistaBus(x1, y1, carrilHueco1(bus++), carril, y2, x2) : pista(x1, y1, carril, y2, x2);
+      pistas += `<path class="tr${valor ? "" : " neg"}${on}" style="--d:${d}ms" d="${dPath}"/>`;
+      if (paso) pulsos += `<path class="pl" pathLength="100" style="--d:${d}ms" d="${dPath}"/>`;
+    });
+    vias += `<circle class="via${on}" style="--d:${d}ms" cx="${carril}" cy="${y2}" r="3"/>`;
+    etiquetas += `<text class="rl${on}" style="--d:${d}ms" x="${carril}" y="${y2 - 9}" text-anchor="middle">${rg.nombre}</text>`;
+  });
+
+  // Combinación MYCIN por conclusión (se muestra en la segunda línea del chip).
+  const combinada = {};
+  (r?.reglas_aplicadas || []).filter((p) => p.combinada).forEach((p) => { combinada[p.conclusion] = p; });
+
+  Object.entries(pos).forEach(([p, n], i) => {
+    let clase = "node", val = "", sub = "", d = 0;
+    if (n.c === "hechos") {
+      const h = hechos[p];
+      d = i * 35;
+      if (r && !h) { clase += " u"; val = "?"; }
+      else if (h) { clase += h.valor ? " v" : " f"; val = h.valor ? "V" : "F"; }
+    } else if (finales[p]) {
+      const c = finales[p], k = combinada[p];
+      clase += n.c === "diagnostico" ? " on-d" : " on-r";
+      d = tIter(llegada[p]) + 550;
+      sub = k ? `FC ${fc2(c.certeza)} · ${fc2(k.certeza_previa)} ⊕ ${fc2(k.certeza_paso)}` : `FC ${fc2(c.certeza)} · ${c.reglas.join("+")}`;
+    }
+    const yNombre = sub ? n.y + 16 : n.y + 24;
+    nodos += `<g class="${clase}" style="--d:${d}ms" data-p="${p}">
+      <rect class="cuerpo" x="${n.x}" y="${n.y}" width="${n.w}" height="${H_NODO}" rx="4"/>
+      <circle class="led" cx="${n.x + 13}" cy="${n.y + H_NODO / 2}" r="5"/>
+      <text x="${n.x + 25}" y="${yNombre}">${p}</text>
+      ${sub ? `<text class="sub" x="${n.x + 25}" y="${n.y + 31}">${sub}</text>` : ""}
+      ${val ? `<text class="val" x="${n.x + n.w - 10}" y="${n.y + 24}" text-anchor="end">${val}</text>` : ""}</g>`;
+  });
+
+  // Serigrafía y huellas de componentes en los espacios libres de la placa (decorativo).
+  const libre = TOP + 6, abajo = alto - 70;
+  const huellas = [[col.diagnostico.x + 8, libre], [col.recomendacion.x + 40, libre], [col.diagnostico.x + 8, abajo], [col.recomendacion.x + 40, abajo]]
+    .map(([x, y], i) => `<g class="huella" aria-hidden="true"><rect x="${x}" y="${y}" width="8" height="10"/><rect x="${x + 16}" y="${y}" width="8" height="10"/>
+      <rect class="huella__marco" x="${x - 4}" y="${y - 4}" width="32" height="18"/><text x="${x + 36}" y="${y + 9}">${["R22", "C14", "D5", "Q3"][i]}</text>
+      ${i === 2 ? `<rect class="huella__led" x="${x + 70}" y="${y + 2}" width="8" height="6"/>` : ""}</g>`).join("");
+
+  const titulos = `<text class="col-t" x="${col.hechos.x}" y="14">Hechos observables</text>
+    <text class="col-t" x="${col.diagnostico.x}" y="14">Diagnósticos</text>
+    <text class="col-t" x="${col.recomendacion.x}" y="14">Recomendaciones</text>`;
+  const defs = `<defs><pattern id="trama-nodo" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <rect width="1.6" height="5" fill="#3b1d6e"/></pattern></defs>`;
+  svg.innerHTML = `${defs}${titulos}<g>${huellas}</g><g>${pistas}</g><g>${vias}</g><g>${nodos}</g><g>${etiquetas}</g><g>${pulsos}</g>`;
+  pintarRiel(r);
+
+  const disparadas = (r?.reglas_aplicadas || []).map((p) => p.regla).join(", ") || "ninguna";
+  svg.setAttribute("aria-label", r
+    ? `Placa de inferencia. Reglas disparadas: ${disparadas}. El detalle está en el encadenamiento hacia adelante.`
+    : "Placa de inferencia en espera.");
+}
+
+// Riel de LEDs bajo la placa: una luz por iteración y la de punto fijo.
+function pintarRiel(r) {
+  const riel = $("#riel");
+  if (!r) {
+    riel.innerHTML = [1, 2, 3].map((i) => `<span class="riel__led"><i></i>Iter ${i}</span>`).join("") + `<span class="riel__led"><i></i>Punto fijo</span>`;
+    return;
+  }
+  const ultima = Math.max(0, ...r.reglas_aplicadas.map((p) => p.iteracion));
+  let html = "";
+  for (let it = 1; it <= r.iteraciones; it++) {
+    const activa = it <= ultima;
+    html += `<span class="riel__led${activa ? " on" : ""}" style="--d:${tIter(it)}ms"><i></i>Iter ${it}</span>`;
+  }
+  html += `<span class="riel__led fin${r.punto_fijo ? " on" : ""}" style="--d:${tIter(ultima + 1) - 300}ms"><i></i>${r.punto_fijo ? "Punto fijo" : "Límite"}</span>`;
+  riel.innerHTML = html;
+}
+
+// ------------------------------------------------------------------ Encadenamiento (líneas seleccionables)
+function cadenaHTML(r) {
+  const reglasDe = (p) => [...r.diagnosticos, ...r.recomendaciones].find((c) => c.predicado === p)?.reglas || [];
+  const verdaderos = r.hechos_iniciales.filter((h) => h.valor).map((h) => h.predicado);
+  const falsos = r.hechos_iniciales.filter((h) => !h.valor).map((h) => "¬" + h.predicado);
+  const sinDato = Object.keys(BASE.predicados).filter((p) => !r.hechos_iniciales.some((h) => h.predicado === p));
+  let html = `<div class="it is-new" style="--d:0ms"><b>Hechos</b><div class="it__nota">${[...verdaderos, ...falsos].join(" · ") || "ninguno"}${sinDato.length ? `<br>sin dato: ${sinDato.join(", ")}` : ""}</div></div>`;
+  const iteraciones = [...new Set(r.reglas_aplicadas.map((p) => p.iteracion))];
+  iteraciones.forEach((it) => {
+    const d = tIter(it);
+    const lineas = r.reglas_aplicadas.filter((p) => p.iteracion === it).map((p) => {
+      const tipo = BASE.conclusiones[p.conclusion].tipo === "diagnostico" ? "d" : "r";
+      const si = p.condiciones.map((c) => `${c.valor ? "" : "¬"}${c.predicado}`).join(" ∧ ");
+      let linea = `<button type="button" class="cl cl--${tipo}" data-concl="${p.conclusion}" aria-pressed="false">
+        <b>${p.regla}</b><span>${si} → ${p.conclusion}</span><span class="fc">${fc2(p.certeza_paso)}</span></button>`;
+      if (p.combinada) {
+        linea += `<button type="button" class="cl cl--${tipo} cl--comb" data-concl="${p.conclusion}" aria-pressed="false">
+          <b>⊕</b><span>${reglasDe(p.conclusion).join("+")}: ${fc2(p.certeza_previa)} + ${fc2(p.certeza_paso)}·(1 − ${fc2(p.certeza_previa)})</span><span class="fc">${fc2(p.certeza_resultante)}</span></button>`;
+      }
+      return linea;
+    }).join("");
+    html += `<div class="it is-new" style="--d:${d}ms"><b>Iter ${it}</b><div class="it__lineas">${lineas}</div></div>`;
+  });
+  const fin = r.reglas_aplicadas.length ? "Ninguna regla nueva se dispara: punto fijo alcanzado." : "Ninguna regla se cumple con estos hechos.";
+  html += `<div class="it is-new" style="--d:${tIter((iteraciones.at(-1) || 0) + 1)}ms"><b>Iter ${r.iteraciones}</b><div class="it__nota">${fin}</div></div>`;
   return html;
 }
 
-// ------------------------------------------------------------------ Mapa de inferencia (SVG)
-const MAPA = { nodos: {}, ancho: 940, alto: 0 };
-const SVG_NS = "http://www.w3.org/2000/svg";
+// ------------------------------------------------------------------ Veredicto
+function pintarVeredicto(r) {
+  const vd = $("#veredicto");
+  const ultima = Math.max(0, ...r.reglas_aplicadas.map((p) => p.iteracion));
+  vd.style.setProperty("--dv", `${tIter(ultima + 1) - 200}ms`);
+  vd.classList.remove("is-on", "is-none"); void vd.offsetWidth;
 
-function construirMapa() {
-  const svg = $("#mapa");
-  const columnas = [
-    { titulo: "Hechos observables", x: 4, nodos: Object.keys(BASE.predicados) },
-    { titulo: "Diagnósticos", x: 364, nodos: Object.keys(BASE.conclusiones).filter((p) => BASE.conclusiones[p].tipo === "diagnostico") },
-    { titulo: "Recomendaciones", x: 724, nodos: Object.keys(BASE.conclusiones).filter((p) => BASE.conclusiones[p].tipo === "recomendacion") },
-  ];
-  const W = 212, H = 28, GAP = 36, TOP = 42;
-  const filas = Math.max(...columnas.map((c) => c.nodos.length));
-  MAPA.alto = TOP + filas * GAP + 4;
-  svg.setAttribute("viewBox", `0 0 ${MAPA.ancho} ${MAPA.alto}`);
-
-  let aristas = "", nodos = "", titulos = "";
-  columnas.forEach((col) => {
-    const desplaz = ((filas - col.nodos.length) * GAP) / 2;
-    titulos += `<text class="col-t" x="${col.x + 4}" y="20">${col.titulo}</text>`;
-    col.nodos.forEach((p, i) => {
-      const y = TOP + desplaz + i * GAP;
-      MAPA.nodos[p] = { x: col.x, y, w: W, h: H };
-      nodos += `<g class="node" data-p="${p}"><rect x="${col.x}" y="${y}" width="${W}" height="${H}" rx="7"/>
-        <text x="${col.x + 10}" y="${y + 19}">${p}</text><text class="val" x="${col.x + W - 10}" y="${y + 19}" text-anchor="end"></text></g>`;
-    });
-  });
-
-  // Una arista por cada condición de cada regla (predicado condición -> conclusión).
-  BASE.reglas.forEach((r) => {
-    r.condiciones.forEach(([p, valor]) => {
-      const a = MAPA.nodos[p], b = MAPA.nodos[r.conclusion];
-      if (!a || !b) return;
-      const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2, dx = (x2 - x1) * 0.5;
-      const d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
-      const tipo = BASE.conclusiones[r.conclusion].tipo === "diagnostico" ? "d" : "r";
-      aristas += `<path class="edge${valor ? "" : " neg"}" d="${d}"/>
-        <path class="edge-on ${tipo}" data-regla="${r.nombre}" d="${d}" pathLength="1"/>`;
-    });
-  });
-  svg.innerHTML = `${titulos}<g>${aristas}</g><g>${nodos}</g>`;
+  if (r.sin_conclusion) {
+    vd.classList.add("is-none");
+    $("#vd-cuerpo").innerHTML = `
+      <p class="vd__nada"><i class="led led--none" aria-hidden="true"></i>Sin conclusión</p>
+      <p class="hint">Con estos datos ninguna de las ${BASE.reglas.length} reglas se cumple. No se detecta un problema dentro del alcance del sistema, o faltan datos: use <b>¿Por qué no…?</b></p>`;
+    return;
+  }
+  vd.classList.add("is-on");
+  const top = r.diagnosticos[0] || r.recomendaciones[0];
+  const accion = r.diagnosticos.length ? r.recomendaciones[0] : null;
+  const otras = [...r.diagnosticos, ...r.recomendaciones].filter((c) => c !== top && c !== accion);
+  let html = `
+    <div>
+      <p class="vd__titulo"><i class="led" aria-hidden="true"></i><span>${esc(top.titulo)}</span></p>
+      <p class="vd__meta">${top.predicado} · FC ${fc2(top.certeza)} · ${top.reglas.join("+")}</p>
+      <div class="barra" role="img" aria-label="Certeza ${pct(top.certeza)} %"><i style="--w:${pct(top.certeza)}%"></i></div>
+    </div>`;
+  if (accion) {
+    html += `<div class="blk">
+      <p class="vd__accion"><i class="led led--r" aria-hidden="true"></i><span>${esc(accion.titulo)}</span></p>
+      <p class="vd__meta">Acción principal · ${accion.predicado} · FC ${fc2(accion.certeza)} · ${accion.reglas.join(" ⊕ ")}</p></div>`;
+  } else if (r.diagnosticos.length) {
+    html += `<div class="blk"><p class="hint">Hay diagnóstico, pero faltan datos para recomendar una acción (por ejemplo, la calidad gráfica).</p></div>`;
+  }
+  if (otras.length) {
+    html += `<div class="blk"><h3>Otras conclusiones</h3><ul class="otras">${otras.map((c) => `
+      <li><button type="button" class="otra" data-concl="${c.predicado}" aria-pressed="false">${esc(c.titulo)}<span>${fc2(c.certeza)} ${c.reglas.join("+")}</span></button></li>`).join("")}</ul></div>`;
+  }
+  $("#vd-cuerpo").innerHTML = html;
 }
 
-function pintarMapa(r) {
-  const svg = $("#mapa");
-  if (!svg.childElementCount) return;
-  svg.querySelectorAll(".node").forEach((n) => { n.setAttribute("class", "node"); n.querySelector(".val").textContent = ""; });
-  svg.querySelectorAll(".edge-on").forEach((e) => e.classList.remove("is-on"));
+// ------------------------------------------------------------------ ¿Por qué?
+function seleccionar(pred) {
+  if (!ultimoResultado) return;
+  const c = [...ultimoResultado.diagnosticos, ...ultimoResultado.recomendaciones].find((x) => x.predicado === pred);
+  if (!c) return;
+  const lineas = [...document.querySelectorAll(`.cl[data-concl="${pred}"]`)];
+  document.querySelectorAll(".cl").forEach((b) => b.setAttribute("aria-pressed", b === lineas.at(-1)));
+  document.querySelectorAll(".otra").forEach((b) => b.setAttribute("aria-pressed", b.dataset.concl === pred));
+  $("#porque").innerHTML = `
+    <p class="why__tit">${esc(c.titulo)}</p>
+    <p class="why__det">${esc(c.detalle)}</p>
+    <ul class="tree">${nodoHTML(c.arbol)}</ul>`;
+}
 
-  r.hechos_iniciales.forEach((h) => {
-    const n = svg.querySelector(`.node[data-p="${h.predicado}"]`);
-    if (!n) return;
-    n.classList.add(h.valor ? "v" : "f");
-    n.querySelector(".val").textContent = h.valor ? "V" : "F";
-  });
-
-  const PASO = 520;   // ms entre niveles de la cadena
-  void svg.getBoundingClientRect();
-  r.reglas_aplicadas.forEach((p) => {
-    const retraso = `${(p.iteracion - 1) * PASO}ms`;
-    svg.querySelectorAll(`.edge-on[data-regla="${p.regla}"]`).forEach((e) => {
-      e.style.setProperty("--d", retraso);
-      e.classList.add("is-on");
-    });
-    const n = svg.querySelector(`.node[data-p="${p.conclusion}"]`);
-    if (n) {
-      n.style.setProperty("--d", `${(p.iteracion - 1) * PASO + 420}ms`);
-      n.classList.add(BASE.conclusiones[p.conclusion].tipo === "diagnostico" ? "on-d" : "on-r");
-      n.querySelector(".val").textContent = `${pct(p.certeza_resultante)}%`;
-    }
-  });
-  const fired = r.reglas_aplicadas.map((p) => p.regla).join(", ") || "ninguna";
-  svg.setAttribute("aria-label", `Mapa de inferencia. Reglas disparadas: ${fired}. El detalle está en la explicación del razonamiento.`);
+function nodoHTML(nodo) {
+  const r = ultimoResultado;
+  const texto = esc(notacion(nodo.predicado, nodo.valor, r.equipo));
+  if (nodo.tipo === "observado") {
+    const lectura = r.hechos_iniciales.find((h) => h.predicado === nodo.predicado)?.lectura;
+    return `<li>${texto} <span class="tag">· observado${lectura ? `: ${esc(lectura)}` : ""}</span></li>`;
+  }
+  if (nodo.tipo !== "derivado") return `<li class="no">${texto} <span class="tag">· no se pudo concluir</span></li>`;
+  const soportes = nodo.soportes.map((s) => `
+    <li>${esc(s.regla)} <span class="tag">· FC del paso = ${s.certeza_paso}, se cumple:</span>
+      <ul>${s.condiciones.map(nodoHTML).join("")}</ul></li>`).join("");
+  return `<li>${texto} <span class="tag">· FC = ${nodo.certeza}</span><ul>${soportes}</ul></li>`;
 }
 
 // ------------------------------------------------------------------ ¿Por qué no?
@@ -437,17 +524,17 @@ async function porqueNo() {
   const caja = $("#porque-no-resultado");
   try {
     const r = await api("/api/porque", { datos: ultimosDatos, conclusion });
-    if (r.alcanzada) { caja.innerHTML = `<pre class="why__inner">${esc(r.texto)}</pre>`; return; }
-    const estados = { cumple: "✓ se cumple", falso: "✗ es falso", desconocido: "? dato no informado", no_concluido: "✗ no se concluyó" };
+    if (r.alcanzada) { caja.innerHTML = `<div class="whynot"><pre>${esc(r.texto)}</pre></div>`; return; }
+    const estados = { cumple: "se cumple", falso: "es falso", desconocido: "dato no informado", no_concluido: "no se concluyó" };
     caja.innerHTML = `<div class="whynot">
-      <p class="small">No se concluyó <strong>${esc(r.titulo)}</strong>. Reglas que podrían concluirlo:</p>
-      ${r.faltantes.map((f, i) => `
-        <div class="whynot__rule reveal" style="--i:${i}"><span class="badge">${f.regla}</span> <span class="code">${esc(f.logica)}</span>
-          <ul>${f.condiciones.map((c) => `<li class="st-${c.estado}"><span class="code">${esc(c.texto)}</span> — ${estados[c.estado]}</li>`).join("")}</ul>
+      <p>No se concluyó <b>${esc(r.titulo)}</b>. Reglas que podrían concluirlo:</p>
+      ${r.faltantes.map((f) => `
+        <div class="whynot__rule"><span class="badge">${f.regla}</span> <span class="mono">${esc(f.logica)}</span>
+          <ul>${f.condiciones.map((c) => `<li class="st-${c.estado}">${esc(c.texto)} · ${estados[c.estado]}</li>`).join("")}</ul>
         </div>`).join("")}
     </div>`;
   } catch (errs) {
-    caja.innerHTML = `<div class="alert alert--error">${esc([].concat(errs).join(" "))}</div>`;
+    caja.innerHTML = `<div class="alert">${esc([].concat(errs).join(" "))}</div>`;
   }
 }
 
@@ -463,52 +550,56 @@ function pintarBase() {
   $("#tabla-reglas tbody").innerHTML = categorias.map((cat) =>
     `<tr class="cat"><td colspan="5">${esc(cat)}</td></tr>` +
     BASE.reglas.filter((r) => r.categoria === cat).map((r) => `
-      <tr><td><span class="badge">${r.nombre}</span></td><td class="code">${esc(r.logica)}</td>
-      <td class="code">${esc(r.si_entonces)}</td><td>${r.certeza.toFixed(2)}</td><td>${esc(r.justificacion)}</td></tr>`).join("")
+      <tr><td class="code"><b>${r.nombre}</b></td><td class="code">${esc(r.logica)}</td>
+      <td class="code">${esc(r.si_entonces)}</td><td class="code">${r.certeza.toFixed(2)}</td><td>${esc(r.justificacion)}</td></tr>`).join("")
   ).join("");
 
   const estado = $("#estado-ciclos");
-  estado.textContent = BASE.ciclos.length ? `⚠ ${BASE.ciclos.length} ciclo(s) detectado(s)` : `✓ ${BASE.reglas.length} reglas · sin ciclos`;
+  estado.textContent = BASE.ciclos.length ? `${BASE.ciclos.length} ciclo(s) detectado(s)` : `${BASE.reglas.length} reglas · sin ciclos`;
   estado.className = `badge ${BASE.ciclos.length ? "badge--warn" : "badge--ok"}`;
 
   const diag = Object.values(BASE.conclusiones).filter((c) => c.tipo === "diagnostico").length;
-  $("#kb-stats").innerHTML = [
-    ["stat--rule", BASE.reglas.length, "Reglas"], ["", Object.keys(BASE.predicados).length, "Predicados observables"],
-    ["stat--diag", diag, "Diagnósticos posibles"], ["stat--rec", Object.keys(BASE.conclusiones).length - diag, "Recomendaciones posibles"],
-  ].map(([cls, n, label], i) => `<div class="stat ${cls} reveal" style="--i:${i}"><span class="stat__value">${n}</span><span class="stat__label">${label}</span></div>`).join("");
+  $("#kb-stats").textContent = `${BASE.reglas.length} reglas · ${Object.keys(BASE.predicados).length} predicados · `
+    + `${diag} diagnósticos · ${Object.keys(BASE.conclusiones).length - diag} recomendaciones`;
 
-  $("#hud-reglas").textContent = BASE.reglas.length;
-  $("#hud-pred").textContent = Object.keys(BASE.predicados).length;
+  $("#tab-count-base").textContent = `· ${BASE.reglas.length} reglas`;
   $("#hud-estado").textContent = BASE.ciclos.length ? "Base con ciclos" : "Motor listo";
-  document.querySelector(".led").classList.add("is-on");
+  document.querySelector(".led-estado").classList.add("is-on");
+  $("#motor-meta").textContent = `en espera · ${BASE.reglas.length} reglas`;
 
-  $("#caso").innerHTML = `<option value="">— Elegir un caso —</option>` +
+  $("#caso").innerHTML = `<option value="">Elegir un caso…</option>` +
     BASE.casos.map((c) => `<option value="${c.id}">Caso ${c.id}: ${esc(c.nombre)}</option>`).join("");
 }
 
 function cargarCaso() {
   const caso = BASE?.casos.find((c) => String(c.id) === $("#caso").value);
-  if (!caso) { toast("Elija primero un caso de la lista", "error"); return; }
+  if (!caso) { toast("Elija primero un caso de la lista", "error"); $("#caso").focus(); return; }
   llenarFormulario(caso.datos, caso.equipo);
+  casoActual = caso;
   $("#caso").value = caso.id;
   $("#caso-desc").textContent = caso.descripcion;
   diagnosticar();
 }
 
-// Cambio de pestaña con View Transitions: el indicador se desliza y el contenido hace fundido.
-function cambiarPestana(nombre) {
-  const actualizar = () => {
-    document.querySelectorAll(".tab").forEach((t) => {
-      const activa = t.dataset.tab === nombre;
-      t.classList.toggle("is-active", activa);
-      t.setAttribute("aria-selected", activa);
-      if (activa) t.append(document.querySelector(".tab__ind"));
-    });
-    document.querySelectorAll(".tab-panel").forEach((p) => { p.hidden = p.id !== `tab-${nombre}`; });
-  };
-  // El foco se queda en la pestaña pulsada (patrón ARIA de pestañas): nunca queda en un elemento oculto.
-  if (!document.startViewTransition || reducirMovimiento()) { actualizar(); return; }
-  document.startViewTransition(actualizar);
+// ------------------------------------------------------------------ Pestañas (patrón ARIA con flechas)
+function cambiarPestana(nombre, enfocar = false) {
+  document.querySelectorAll(".tab").forEach((t) => {
+    const activa = t.dataset.tab === nombre;
+    t.classList.toggle("is-active", activa);
+    t.setAttribute("aria-selected", activa);
+    t.tabIndex = activa ? 0 : -1;
+    if (activa && enfocar) t.focus();
+  });
+  document.querySelectorAll(".tab-panel").forEach((p) => { p.hidden = p.id !== `tab-${nombre}`; });
+}
+
+function teclasPestanas(e) {
+  const tabs = [...document.querySelectorAll(".tab")];
+  const actual = tabs.indexOf(e.target);
+  const destino = { ArrowRight: actual + 1, ArrowLeft: actual - 1, Home: 0, End: tabs.length - 1 }[e.key];
+  if (destino === undefined) return;
+  e.preventDefault();
+  cambiarPestana(tabs[(destino + tabs.length) % tabs.length].dataset.tab, true);
 }
 
 // ------------------------------------------------------------------ Eventos
@@ -520,32 +611,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     const caso = BASE?.casos.find((c) => String(c.id) === $("#caso").value);
     $("#caso-desc").textContent = caso ? caso.descripcion : "";
   });
+  // Si el usuario edita el formulario, ya no es exactamente el caso de prueba.
+  $("#formulario").addEventListener("input", (e) => { if (e.target.id !== "caso") casoActual = null; });
   $("#btn-porque-no").addEventListener("click", porqueNo);
   $("#btn-efectos").addEventListener("click", alternarEfectos);
   pintarBotonEfectos();
-  CAMPOS_NUMERICOS.forEach((c) => $("#" + c).addEventListener("input", (e) => actualizarMedidor(e.target)));
+  CAMPOS_NUMERICOS.forEach((c) => $("#" + c).addEventListener("input", (e) => {
+    actualizarMetrica(e.target);
+    if (e.target.hasAttribute("aria-invalid")) marcarCampo(e.target, null);
+  }));
   document.querySelectorAll(".segmented[data-pred]").forEach((g) => g.addEventListener("change", () => actualizarSegmento(g)));
-  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => cambiarPestana(t.dataset.tab)));
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-why]");
-    if (btn) alternarPorque(btn);
+  document.querySelectorAll(".tab").forEach((t) => {
+    t.addEventListener("click", () => cambiarPestana(t.dataset.tab));
+    t.addEventListener("keydown", teclasPestanas);
   });
-  // Foco de luz que sigue al puntero sobre las tarjetas (solo actualiza dos variables CSS).
-  document.addEventListener("pointermove", (e) => {
-    const card = e.target.closest?.(".card");
-    if (!card) return;
-    const caja = card.getBoundingClientRect();
-    card.style.setProperty("--mx", `${e.clientX - caja.left}px`);
-    card.style.setProperty("--my", `${e.clientY - caja.top}px`);
-  }, { passive: true });
+  document.addEventListener("click", (e) => {
+    const linea = e.target.closest(".cl, .otra");
+    if (linea) seleccionar(linea.dataset.concl);
+  });
   refrescarIndicadores();
 
   try {
     BASE = await api("/api/base");
     pintarBase();
-    construirMapa();
+    construirPlaca(null);
   } catch (errs) {
     $("#hud-estado").textContent = "Sin conexión";
-    mostrarErrores([].concat(errs));
+    mostrarErrores([].concat(errs).map((m) => ({ campo: null, mensaje: String(m) })));
   }
 });

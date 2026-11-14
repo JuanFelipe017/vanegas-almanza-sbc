@@ -11,7 +11,7 @@ La interfaz nunca reimplementa la lógica del SBC: solo envía los datos del for
 muestra lo que devuelve el motor de inferencia.
 
 Ejecutar desde la carpeta del proyecto:   python src/app.py   ->  http://127.0.0.1:5000
-Autores: Juan F. Vanegas Silva · Diego Felipe Almanza Vanegas
+Autores: Juan F. Vanegas Silva · Diego Felipe Almanza Ruiz
 """
 
 import logging

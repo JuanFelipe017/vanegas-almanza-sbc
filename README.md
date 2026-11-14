@@ -1,7 +1,7 @@
 # Sistema experto de rendimiento en videojuegos (PC)
 
 **Inteligencia Artificial II — Proyecto final · Fundación Universitaria Los Libertadores**
-Juan F. Vanegas Silva · Diego Felipe Almanza Vanegas
+Juan F. Vanegas Silva · Diego Felipe Almanza Ruiz
 
 **Demo en línea:** <https://vanegas-almanza-sbc.onrender.com> _(plan gratis: si nadie la ha abierto en 15 minutos tarda ~1 minuto en despertar)_
 
@@ -39,11 +39,11 @@ Abrir <http://127.0.0.1:5000>. Para detenerla: `Ctrl + C` en la consola.
 Uso rápido: elegir un caso en **Casos de prueba precargados → Cargar**, o llenar el formulario y presionar
 **Diagnosticar**. Ver `docs/manual_usuario.pdf`.
 
-La interfaz (estilo HUD gamer) incluye un **mapa de inferencia** animado que ilumina las reglas disparadas
-nivel por nivel, medidores de umbral con vista previa del predicado (`FPSBajos = V`), anillos de certeza y
-transiciones entre pestañas. Las animaciones siguen la preferencia de Windows (`prefers-reduced-motion`);
-si no se ven, activarlas con el botón **Efectos** de la barra superior. Funciona sin internet (las fuentes de
-Google se usan solo si hay conexión).
+La interfaz va montada sobre una **placa de circuito** morada con pistas de oro: al diagnosticar, la señal recorre
+las pistas de cada regla iteración por iteración, enciende los diagnósticos y las recomendaciones y por último el
+veredicto. Debajo de la placa está el encadenamiento hacia adelante (cada línea explica su ¿Por qué?). Las
+animaciones siguen la preferencia de Windows (`prefers-reduced-motion`); si no se ven, activarlas con el botón
+**Animaciones** de la barra superior. Funciona sin internet: las fuentes van incluidas en `static/fonts/`.
 
 ## Pruebas
 
