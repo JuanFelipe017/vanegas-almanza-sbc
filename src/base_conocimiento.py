@@ -20,7 +20,7 @@ Convención de las reglas (igual al formato del enunciado):
 Todas las reglas están cuantificadas universalmente (∀x, x ∈ E = equipos en una sesión de
 juego). En el motor la x se instancia con el equipo que se está consultando.
 
-Autores: Juan F. Vanegas Silva · Diego Felipe Almanza Vanegas
+Autores: Juan F. Vanegas Silva · Diego Felipe Almanza Ruiz
 """
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@ Cada hecho puede quedar en tres estados:
     False  -> el predicado NO se cumple          (ej. fps = 60  -> FPSBajos = False)
     (ausente) -> desconocido: el campo se dejó vacío o en "No sé"
 
-Autores: Juan F. Vanegas Silva · Diego Felipe Almanza Vanegas
+Autores: Juan F. Vanegas Silva · Diego Felipe Almanza Ruiz
 """
 
 # Campos numéricos: (predicado, función umbral, mínimo, máximo, unidad, etiqueta)

@@ -1,6 +1,6 @@
 # Casos de prueba y validación
 
-Sistema experto de diagnóstico de rendimiento en videojuegos — Juan F. Vanegas Silva · Diego Felipe Almanza Vanegas
+Sistema experto de diagnóstico de rendimiento en videojuegos — Juan F. Vanegas Silva · Diego Felipe Almanza Ruiz
 
 Las reglas y conclusiones **esperadas** se definieron antes de ejecutar el sistema, razonando a mano con la base de conocimiento. La columna **Resultado obtenido** se generó ejecutando el motor (`python -m unittest discover -s tests -v` verifica lo mismo automáticamente). Los datos de cada caso están en `src/casos.py` y también se pueden cargar desde la interfaz web (selector *Casos de prueba precargados*).
 

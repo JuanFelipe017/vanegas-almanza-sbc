@@ -18,7 +18,7 @@ Protección contra ciclos infinitos (dos niveles):
   * Antes de ejecutar: detectar_ciclos() revisa el grafo de dependencias de la base
     (predicado condición -> predicado conclusión) y reporta ciclos como A -> B -> A.
 
-Autores: Juan F. Vanegas Silva · Diego Felipe Almanza Vanegas
+Autores: Juan F. Vanegas Silva · Diego Felipe Almanza Ruiz
 """
 
 import logging
