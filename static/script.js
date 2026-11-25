@@ -281,7 +281,12 @@ function mostrarResultado(r) {
 // iteración por iteración y un pulso de señal las recorre.
 // Chips de dos líneas (nombre y "FC 0.80 · R2") para que se lean en el proyector.
 const PLACA = { W: 698, TOP: 40, PASO_FILA: 46, H_NODO: 38,
-  col: { hechos: { x: 0, w: 170 }, diagnostico: { x: 246, w: 180 }, recomendacion: { x: 502, w: 196 } } };
+  col: { hechos: { x: 0, w: 170 }, diagnostico: { x: 246, w: 180 }, recomendacion: { x: 502, w: 196 } },
+  // modo celular: bandas de chips en 2 columnas con un bus central por donde bajan las pistas
+  V: { W: 340, m: 6, w: 140, paso: 50 },
+  titulo: { hechos: "Hechos observables", diagnostico: "Diagnósticos", recomendacion: "Recomendaciones" } };
+const VERTICAL = matchMedia("(max-width: 600px)");
+VERTICAL.addEventListener("change", () => { if (BASE) construirPlaca(ultimoResultado); });
 
 function columnaDe(p) {
   if (BASE.predicados[p]) return "hechos";
@@ -294,6 +299,22 @@ function pista(x1, y1, carril, y2, x2) {
   if (Math.abs(y2 - y1) < 2 * s) return `M${x1} ${y1}H${carril}V${y2}H${x2}`;
   const d = Math.sign(y2 - y1);
   return `M${x1} ${y1}H${carril - s}L${carril} ${y1 + d * s}V${y2 - d * s}L${carril + s} ${y2}H${x2}`;
+}
+
+// Polilínea ortogonal con esquinas a 45° (placa vertical); quita puntos repetidos o alineados.
+function polilinea(pts, s = 4) {
+  pts = pts.filter((q, i) => !i || q[0] !== pts[i - 1][0] || q[1] !== pts[i - 1][1]);
+  pts = pts.filter((q, i) => !i || i === pts.length - 1
+    || !((pts[i - 1][0] === q[0] && q[0] === pts[i + 1][0]) || (pts[i - 1][1] === q[1] && q[1] === pts[i + 1][1])));
+  const dir = (a, b) => [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])];
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [a, b, c] = [pts[i - 1], pts[i], pts[i + 1]];
+    const r = Math.min(s, Math.hypot(b[0] - a[0], b[1] - a[1]) / 2, Math.hypot(c[0] - b[0], c[1] - b[1]) / 2);
+    const [ux, uy] = dir(b, a), [vx, vy] = dir(b, c);
+    d += `L${b[0] + ux * r} ${b[1] + uy * r}L${b[0] + vx * r} ${b[1] + vy * r}`;
+  }
+  return d + `L${pts.at(-1)[0]} ${pts.at(-1)[1]}`;
 }
 
 // Pista que cruza por encima de la columna de diagnósticos (hecho → recomendación).
@@ -311,14 +332,34 @@ function construirPlaca(r) {
     recomendacion: Object.keys(BASE.conclusiones).filter((p) => BASE.conclusiones[p].tipo === "recomendacion"),
   };
   const filas = listas.hechos.length;
-  const alto = TOP + filas * PASO_FILA + 4;
-  svg.setAttribute("viewBox", `0 0 ${W} ${alto}`);
+  const vertical = VERTICAL.matches;
+  let alto = TOP + filas * PASO_FILA + 4, ancho = W, titulos = "";
 
-  const pos = {};
-  Object.entries(listas).forEach(([c, nodos]) => {
-    const desplaz = ((filas - nodos.length) * PASO_FILA) / 2;
-    nodos.forEach((p, i) => { pos[p] = { x: col[c].x, w: col[c].w, y: TOP + desplaz + i * PASO_FILA, c }; });
-  });
+  const pos = {}, V = PLACA.V;
+  if (vertical) {
+    // Celular: la placa se transpone. Cada columna pasa a ser una banda de chips en 2 columnas
+    // y las pistas bajan de banda en banda: hechos → diagnósticos → recomendaciones.
+    let y = 0;
+    ancho = V.W;
+    Object.entries(listas).forEach(([c, nodos]) => {
+      y += 30;   // espacio para el título de la banda
+      titulos += `<text class="col-t" x="${V.m}" y="${y - 10}">${PLACA.titulo[c]}</text>`;
+      nodos.forEach((p, i) => {
+        const j = i % 2;
+        pos[p] = { x: j ? V.W - V.m - V.w : V.m, w: V.w, y: y + Math.floor(i / 2) * V.paso, c, j };
+      });
+      y += Math.ceil(nodos.length / 2) * V.paso;
+    });
+    alto = y;
+  } else {
+    Object.entries(listas).forEach(([c, nodos]) => {
+      const desplaz = ((filas - nodos.length) * PASO_FILA) / 2;
+      nodos.forEach((p, i) => { pos[p] = { x: col[c].x, w: col[c].w, y: TOP + desplaz + i * PASO_FILA, c }; });
+      titulos += `<text class="col-t" x="${col[c].x}" y="14">${PLACA.titulo[c]}</text>`;
+    });
+  }
+  svg.setAttribute("viewBox", `0 0 ${ancho} ${alto}`);
+  svg.classList.toggle("vertical", vertical);
   const centro = (p) => pos[p].y + H_NODO / 2;
 
   // Estado del resultado
@@ -339,6 +380,30 @@ function construirPlaca(r) {
   });
   const carrilHueco1 = (i) => col.hechos.w + 14 + i * 5;   // carriles del bus (hecho → recomendación)
 
+  // Placa vertical: cada regla disparada baja recta por su propio carril del bus central.
+  // Sus condiciones salen por abajo del chip y se sueldan al carril (vía); el carril entra
+  // por arriba del chip destino. Reglas que no se solapan en altura comparten carril, y
+  // cada una prefiere el lado de sus chips para cruzar menos pistas.
+  const carrilV = {}, topeV = {};
+  if (vertical) {
+    const xs = [0, 1, 2, 3, 4, 5].map((i) => V.W / 2 + (i - 2.5) * 7), fin = xs.map(() => -Infinity);
+    BASE.reglas.filter((rg) => disparo[rg.nombre] && pos[rg.conclusion]).map((rg) => {
+      const fuentes = rg.condiciones.map(([p]) => pos[p]).filter(Boolean), t = pos[rg.conclusion];
+      const lado = (fuentes.reduce((a, s) => a + s.j, 0) + t.j) / (fuentes.length + 1);
+      return { rg, ini: Math.min(...fuentes.map((s) => s.y)), hasta: t.y, pref: V.W / 2 + (lado - 0.5) * 40 };
+    }).sort((a, b) => a.ini - b.ini).forEach(({ rg, ini, hasta, pref }) => {
+      const libres = xs.map((_, i) => i).filter((i) => fin[i] < ini);
+      const i = libres.length ? libres.reduce((m, i) => (Math.abs(xs[i] - pref) < Math.abs(xs[m] - pref) ? i : m))
+        : fin.indexOf(Math.min(...fin));   // más de 6 reglas solapadas: reutiliza el carril que se libera antes
+      fin[i] = hasta; carrilV[rg.nombre] = xs[i]; topeV[rg.nombre] = ini;
+    });
+  }
+  const puerto = (n) => (n.j ? n.x + 24 : n.x + n.w - 24);   // pin del lado del bus
+  const pistaVertical = (s, t, carril) => {
+    const sx = puerto(s), sb = s.y + H_NODO, tx = puerto(t), ty = t.y;
+    return polilinea([[sx, sb], [sx, sb + 4], [carril, sb + 4], [carril, ty - 4], [tx, ty - 4], [tx, ty]]);
+  };
+
   let pistas = "", pulsos = "", etiquetas = "", vias = "", nodos = "", bus = 0;
   BASE.reglas.forEach((rg) => {
     const destino = rg.conclusion;
@@ -347,14 +412,22 @@ function construirPlaca(r) {
     const d = paso ? tIter(paso.iteracion) : 0;
     const on = paso ? " on" : "";
     const x2 = pos[destino].x, y2 = centro(destino), carril = carriles[rg.nombre];
+    // en celular solo se dibujan las reglas disparadas: el flujo aparece al diagnosticar
+    if (vertical && !paso) return;
     rg.condiciones.forEach(([p, valor]) => {
       if (!pos[p]) return;
       const x1 = pos[p].x + pos[p].w, y1 = centro(p);
       const cruza = pos[p].c === "hechos" && pos[destino].c === "recomendacion";
-      const dPath = cruza ? pistaBus(x1, y1, carrilHueco1(bus++), carril, y2, x2) : pista(x1, y1, carril, y2, x2);
+      const dPath = vertical ? pistaVertical(pos[p], pos[destino], carrilV[rg.nombre])
+        : cruza ? pistaBus(x1, y1, carrilHueco1(bus++), carril, y2, x2) : pista(x1, y1, carril, y2, x2);
       pistas += `<path class="tr${valor ? "" : " neg"}${on}" style="--d:${d}ms" d="${dPath}"/>`;
       if (paso) pulsos += `<path class="pl" pathLength="100" style="--d:${d}ms" d="${dPath}"/>`;
+      // vía donde una condición más baja se suelda al carril de su regla
+      if (vertical && pos[p].y > topeV[rg.nombre]) {
+        vias += `<circle class="via${on}" style="--d:${d}ms" cx="${carrilV[rg.nombre]}" cy="${pos[p].y + H_NODO + 4}" r="2.6"/>`;
+      }
     });
+    if (vertical) return;   // sin vías ni etiquetas R#: la regla ya se lee en el chip ("FC 0.85 · R5")
     vias += `<circle class="via${on}" style="--d:${d}ms" cx="${carril}" cy="${y2}" r="3"/>`;
     etiquetas += `<text class="rl${on}" style="--d:${d}ms" x="${carril}" y="${y2 - 9}" text-anchor="middle">${rg.nombre}</text>`;
   });
@@ -377,12 +450,15 @@ function construirPlaca(r) {
       sub = k ? `FC ${fc2(c.certeza)} · ${fc2(k.certeza_previa)} ⊕ ${fc2(k.certeza_paso)}` : `FC ${fc2(c.certeza)} · ${c.reglas.join("+")}`;
     }
     const yNombre = sub ? n.y + 16 : n.y + 24;
+    const tx = vertical ? 20 : 25, lx = vertical ? 10 : 13;
+    // chips angostos del celular: si el texto no cabe se comprime a lo ancho disponible
+    const ajuste = (texto, px, libre) => (vertical && texto.length * px > libre ? ` textLength="${libre}" lengthAdjust="spacingAndGlyphs"` : "");
     nodos += `<g class="${clase}" style="--d:${d}ms" data-p="${p}">
       <rect class="cuerpo" x="${n.x}" y="${n.y}" width="${n.w}" height="${H_NODO}" rx="4"/>
-      <circle class="led" cx="${n.x + 13}" cy="${n.y + H_NODO / 2}" r="5"/>
-      <text x="${n.x + 25}" y="${yNombre}">${p}</text>
-      ${sub ? `<text class="sub" x="${n.x + 25}" y="${n.y + 31}">${sub}</text>` : ""}
-      ${val ? `<text class="val" x="${n.x + n.w - 10}" y="${n.y + 24}" text-anchor="end">${val}</text>` : ""}</g>`;
+      <circle class="led" cx="${n.x + lx}" cy="${n.y + H_NODO / 2}" r="${vertical ? 4 : 5}"/>
+      <text x="${n.x + tx}" y="${yNombre}"${ajuste(p, 6.3, n.w - tx - (val ? 16 : 6))}>${p}</text>
+      ${sub ? `<text class="sub" x="${n.x + tx}" y="${n.y + 31}"${ajuste(sub, 5.7, n.w - tx - 6)}>${sub}</text>` : ""}
+      ${val ? `<text class="val" x="${n.x + n.w - (vertical ? 7 : 10)}" y="${n.y + 24}" text-anchor="end">${val}</text>` : ""}</g>`;
   });
 
   // Serigrafía y huellas de componentes en los espacios libres de la placa (decorativo).
@@ -392,12 +468,9 @@ function construirPlaca(r) {
       <rect class="huella__marco" x="${x - 4}" y="${y - 4}" width="32" height="18"/><text x="${x + 36}" y="${y + 9}">${["R22", "C14", "D5", "Q3"][i]}</text>
       ${i === 2 ? `<rect class="huella__led" x="${x + 70}" y="${y + 2}" width="8" height="6"/>` : ""}</g>`).join("");
 
-  const titulos = `<text class="col-t" x="${col.hechos.x}" y="14">Hechos observables</text>
-    <text class="col-t" x="${col.diagnostico.x}" y="14">Diagnósticos</text>
-    <text class="col-t" x="${col.recomendacion.x}" y="14">Recomendaciones</text>`;
   const defs = `<defs><pattern id="trama-nodo" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
     <rect width="1.6" height="5" fill="#3b1d6e"/></pattern></defs>`;
-  svg.innerHTML = `${defs}${titulos}<g>${huellas}</g><g>${pistas}</g><g>${vias}</g><g>${nodos}</g><g>${etiquetas}</g><g>${pulsos}</g>`;
+  svg.innerHTML = `${defs}${titulos}<g>${vertical ? "" : huellas}</g><g>${pistas}</g><g>${vias}</g><g>${nodos}</g><g>${etiquetas}</g><g>${pulsos}</g>`;
   pintarRiel(r);
 
   const disparadas = (r?.reglas_aplicadas || []).map((p) => p.regla).join(", ") || "ninguna";

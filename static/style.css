@@ -254,6 +254,9 @@ input[aria-invalid="true"] { border-color: var(--err); box-shadow: 0 0 0 1px var
 }
 .placa-wrap { position: relative; margin-top: 10px; overflow-x: auto; transition: opacity .2s; }
 .placa { display: block; width: 100%; min-width: 560px; height: auto; font-family: var(--mono); }
+@media (max-width: 600px) { .placa { min-width: 0; } } /* en celular la placa se arma vertical (script.js) */
+.placa.vertical .node text { font-size: 10.5px; }
+.placa.vertical .node .sub { font-size: 9.5px; }
 .placa__vacio {
   position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: min(340px, 80%); padding: 14px 16px; text-align: center;
   font-size: 13.5px; color: var(--tx); background: rgb(13 6 24 / .88); border: 1px solid var(--ln-2); border-radius: var(--radius);
